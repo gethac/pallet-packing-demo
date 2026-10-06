@@ -1,0 +1,26 @@
+:root {
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #1f2937;
+  background: #f3f5f8;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, select, input {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+button.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+table { border-collapse: collapse; width: 100%; background: #fff; }
+th, td { border: 1px solid #e5e7eb; padding: 6px 8px; font-size: 13px; text-align: left; }
+th { background: #f8fafc; }
