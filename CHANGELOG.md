@@ -2,6 +2,12 @@
 
 本项目为从生产 MES「销售订单托盘摆放」抽取的**模拟最小实现**（Mock 数据 + 可运行引擎/三维），用于 AI Coding 作业演示。
 
+## [Unreleased] - 2026-10-06
+- 数据库设计：`docs/design/ddl-pallet.sql` 按生产实体与 Mapper 重写（公共字段、逻辑删除、PRODUCT_COMPOSITION、BOX_LAYOUT 等），新增与演示表的对应关系；ER 图重绘为高清版。
+- 需求规格：`docs/design/requirement-spec.md` 改为编号规则、接口、异常与验收表。
+- 过程证据图统一改用 Noto Sans CJK 字体重新生成（mvn test、npm build、SpotBugs、git diff、代码截图）；移除会过期的 CI/git log 截图。
+- `AGENTS.md` 注明来源；`.codex/skills` 补充 `minimal-commit`，`db-design`、`requirement-spec` 与生产规则对齐。
+
 ## [1.0.0] — 2026-10-06
 
 ### 亮点

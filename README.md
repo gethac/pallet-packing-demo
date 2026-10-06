@@ -126,7 +126,7 @@ Mock 订单由服务层内置（如 `ORDER-MIX-PACK`）；与生产路径语义�
 
 ## 设计归档与 Codex
 
-- 设计产物：[`docs/design/`](docs/design/)（需求规格、UI 规范、DDL、ER、线框/高保真、v11 效果）
+- 设计产物：[`docs/design/`](docs/design/)（需求规格、UI 规范、DDL、ER、线框/高保真、页面效果）
 - 过程证据：[`docs/evidence/`](docs/evidence/)
 - 协作约定：[`AGENTS.md`](AGENTS.md)
 - Skills：[`.codex/skills/`](.codex/skills/)（`requirement-spec` / `prototype-ui` / `db-design` / `pallet-engine-dev` / `bugfix-spotbugs`）
