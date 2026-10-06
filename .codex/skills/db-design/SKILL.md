@@ -1,4 +1,9 @@
-# Skill: db-design
+---
+name: db-design
+description: 维护托盘相关表结构、ER 图、DDL、迁移脚本，或核对实体/Mapper 与表结构是否一致时使用。
+---
+
+# db-design
 用途：从生产实体与 Mapper 反推并维护托盘表结构（ER、字段字典、DDL）。
 输入：PalletStandard / SaleOrderPalletPlan / SaleOrderPalletGroup / SaleOrderPalletItem 实体的 @TableField，
       以及 Mapper 的 resultMap、insertBatch 列清单。

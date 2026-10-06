@@ -1,4 +1,9 @@
-# Skill: requirement-spec
+---
+name: requirement-spec
+description: 把托盘摆放业务需求、需求变更清单整理为带编号规则和验收标准的规格说明时使用。
+---
+
+# requirement-spec
 用途：把托盘摆放的业务口述、需求变更清单整理成可验收的规格说明。
 输入：业务需求清单、plan.md 相关章节、现有代码（接口、校验文案、实体字段）。
 规则：

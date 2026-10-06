@@ -1,4 +1,9 @@
-# Skill: prototype-ui
+---
+name: prototype-ui
+description: 设计或修改托盘摆放页面（参数区、产品表、托盘清单、三维预览）的原型与界面时使用。
+---
+
+# prototype-ui
 用途：按 UI 规范生成线框/高保真说明。
 输入：页面分区（参数/产品/清单/三维）+ Element Plus 约束。
 输出：信息架构、控件清单、空态/错态、增强版控件（动画/视角/图例）。
