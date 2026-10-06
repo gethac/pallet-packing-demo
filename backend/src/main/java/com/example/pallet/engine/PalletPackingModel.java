@@ -15,6 +15,14 @@ public class PalletPackingModel {
         private Boolean allowMixedPallet;
         private Boolean allowMixedPackagePallet;
         private Boolean allowMixedNoBoxPallet;
+
+        public List<BoxTask> getBoxTaskList() {
+            return List.copyOf(boxTaskList);
+        }
+
+        public void setBoxTaskList(List<BoxTask> boxTaskList) {
+            this.boxTaskList = new ArrayList<>(boxTaskList == null ? List.of() : boxTaskList);
+        }
     }
 
     @Data

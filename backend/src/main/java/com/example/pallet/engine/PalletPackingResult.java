@@ -18,6 +18,30 @@ public class PalletPackingResult {
     private List<ItemResult> itemList = new ArrayList<>();
     private List<BoxResult> boxList = new ArrayList<>();
 
+    public List<GroupResult> getGroupList() {
+        return List.copyOf(groupList);
+    }
+
+    public void setGroupList(List<GroupResult> groupList) {
+        this.groupList = new ArrayList<>(groupList == null ? List.of() : groupList);
+    }
+
+    public List<ItemResult> getItemList() {
+        return List.copyOf(itemList);
+    }
+
+    public void setItemList(List<ItemResult> itemList) {
+        this.itemList = new ArrayList<>(itemList == null ? List.of() : itemList);
+    }
+
+    public List<BoxResult> getBoxList() {
+        return List.copyOf(boxList);
+    }
+
+    public void setBoxList(List<BoxResult> boxList) {
+        this.boxList = new ArrayList<>(boxList == null ? List.of() : boxList);
+    }
+
     @Data
     public static class GroupResult {
         private String groupNo;

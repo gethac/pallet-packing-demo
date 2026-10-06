@@ -66,7 +66,7 @@ public class PalletPackingEngine {
         if (!positive(spec.getLength()) || !positive(spec.getWidth())) {
             throw new PackingException("托盘长宽必须大于0");
         }
-        if (request.getBoxTaskList() == null || request.getBoxTaskList().isEmpty()) {
+        if (request.getBoxTaskList().isEmpty()) {
             throw new PackingException("没有可用于装托的包装数据");
         }
         double weightLimit = spec.getWeightLimit();
@@ -363,6 +363,9 @@ public class PalletPackingEngine {
 
     private PalletPackingResult toResult(List<InternalPallet> pallets, PalletPackingModel.PalletSpec spec) {
         PalletPackingResult result = new PalletPackingResult();
+        List<PalletPackingResult.GroupResult> groupResults = new ArrayList<>();
+        List<PalletPackingResult.ItemResult> itemResults = new ArrayList<>();
+        List<PalletPackingResult.BoxResult> boxResults = new ArrayList<>();
         Map<String, List<InternalPallet>> byGroup = new LinkedHashMap<>();
         for (InternalPallet p : pallets) {
             String key = p.groupType + "|" + p.productKeys;
@@ -415,7 +418,7 @@ public class PalletPackingEngine {
                 item.setHeightUtilization(round4(heightUtil));
                 item.setStabilityScore(round4(0.5 * areaUtil + 0.5 * (1 - Math.abs(heightUtil - areaUtil))));
                 item.setSort(itemSort++);
-                result.getItemList().add(item);
+                itemResults.add(item);
 
                 for (PlacedBox box : p.boxes) {
                     PalletPackingResult.BoxResult br = new PalletPackingResult.BoxResult();
@@ -442,7 +445,7 @@ public class PalletPackingEngine {
                     br.setOccupyHeight(round2(box.occupyH));
                     br.setIsMixed(box.isMixed);
                     br.setSort(boxSort++);
-                    result.getBoxList().add(br);
+                    boxResults.add(br);
                 }
 
                 gWeight += p.totalWeight;
@@ -458,7 +461,7 @@ public class PalletPackingEngine {
             g.setTotalWeight(round2(gWeight));
             g.setAreaUtilization(round4(gArea / list.size()));
             g.setHeightUtilization(round4(gHeight / list.size()));
-            result.getGroupList().add(g);
+            groupResults.add(g);
         }
 
         result.setTotalPalletCount(pallets.size());
@@ -468,6 +471,9 @@ public class PalletPackingEngine {
             result.setAvgAreaUtilization(round4(areaSum / pallets.size()));
             result.setAvgHeightUtilization(round4(heightSum / pallets.size()));
         }
+        result.setGroupList(groupResults);
+        result.setItemList(itemResults);
+        result.setBoxList(boxResults);
         return result;
     }
 

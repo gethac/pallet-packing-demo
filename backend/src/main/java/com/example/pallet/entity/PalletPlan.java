@@ -43,4 +43,20 @@ public class PalletPlan {
     private List<PalletGroup> groupList = new ArrayList<>();
     @Transient
     private List<PalletItem> itemList = new ArrayList<>();
+
+    public List<PalletGroup> getGroupList() {
+        return List.copyOf(groupList);
+    }
+
+    public void setGroupList(List<PalletGroup> groupList) {
+        this.groupList = new ArrayList<>(groupList == null ? List.of() : groupList);
+    }
+
+    public List<PalletItem> getItemList() {
+        return List.copyOf(itemList);
+    }
+
+    public void setItemList(List<PalletItem> itemList) {
+        this.itemList = new ArrayList<>(itemList == null ? List.of() : itemList);
+    }
 }
