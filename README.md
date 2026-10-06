@@ -148,12 +148,22 @@ GitHub Actions：仓库内已准备 `.github/workflows/ci.yml`（`mvn test` + `n
 仅供学习与作业演示，禁止用于还原生产敏感数据或未授权商业使用。
 
 
+## v10 混装三维演示
+
+- 默认完整装托态（不自动播放动画）；图例移到画布下方独立栏
+- 引擎补全混托续装层（`fillPallet` 继承已有层），盒箱混装自然 4 层：大箱底、小盒顶
+- 规格色：纸箱L深牛皮 / 纸箱M浅牛皮；彩盒M绿白 / 彩盒S蓝白
+- 特写：`docs/ui-v10-mix-pack-*-closeup.png`
+
 ## v9 混装三维演示
 
 | 场景 | 截图 |
 |------|------|
-| 盒箱混装等轴 | ![iso](docs/ui-v9-mix-pack-iso.png) |
-| 图例高亮规格 | ![legend](docs/ui-v9-mix-pack-legend-highlight.png) |
-| 爆炸视图 | ![explode](docs/ui-v9-mix-pack-explode.png) |
+| 盒箱混装等轴 | ![iso](docs/ui-v10-mix-pack-iso.png) |
+| 图例高亮规格 | ![legend](docs/ui-v10-mix-pack-legend-highlight.png) |
+| 爆炸视图 | ![explode](docs/ui-v10-mix-pack-explode.png) |
+| 特写·等轴完整 | ![iso-c](docs/ui-v10-mix-pack-iso-closeup.png) |
+| 特写·图例高亮 | ![leg-c](docs/ui-v10-mix-pack-legend-closeup.png) |
+| 特写·爆炸 | ![exp-c](docs/ui-v10-mix-pack-explode-closeup.png) |
 
 动画：[`docs/pallet-packing-mix-animation.mp4`](docs/pallet-packing-mix-animation.mp4)（同步更新 `pallet-packing-animation.mp4` / `.gif`）。

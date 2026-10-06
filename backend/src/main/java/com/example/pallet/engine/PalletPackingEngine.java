@@ -115,8 +115,11 @@ public class PalletPackingEngine {
         double palletL = spec.getLength();
         double palletW = spec.getWidth();
 
-        List<Layer> layers = new ArrayList<>();
-        double currentWeight = 0;
+        // 混托合并时续装：必须继承已有层与重量，否则不同高度会被错误叠到 z=0
+        List<Layer> layers = (pallet.layers == null || pallet.layers.isEmpty())
+                ? new ArrayList<>()
+                : new ArrayList<>(pallet.layers);
+        double currentWeight = pallet.totalWeight;
 
         while (!remaining.isEmpty()) {
             PalletPackingModel.BoxTask next = remaining.get(0);

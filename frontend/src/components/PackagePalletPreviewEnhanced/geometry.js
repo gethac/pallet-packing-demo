@@ -5,26 +5,32 @@ const DEFAULT_BOX_COLORS = Object.freeze({
   stroke: "#a8753f",
 });
 
-// 彩盒/白卡：偏亮色调，便于与瓦楞纸箱区分
+// 彩盒：明确品牌色（蓝白 / 绿白），纸箱：牛皮纸深浅两档
 const BOX_COLOR_PALETTE = Object.freeze([
-  { top: "#f7f1e8", front: "#efe4d4", side: "#e2d3be", stroke: "#b59b7a" },
-  { top: "#fde8ef", front: "#f5cdd9", side: "#e8b0c2", stroke: "#c47a93" },
-  { top: "#e8f4ff", front: "#cfe6fb", side: "#b3d4f0", stroke: "#7aa3c4" },
-  { top: "#e9f8ee", front: "#cfead8", side: "#b3d9c0", stroke: "#7aaa88" },
-  { top: "#fff3e0", front: "#ffe0b8", side: "#f5c98f", stroke: "#c99655" },
-  { top: "#f0e8ff", front: "#ddd0f5", side: "#c7b6e8", stroke: "#9580c0" },
-  { top: "#e8e3d8", front: "#cfc8ba", side: "#b8afa0", stroke: "#8e8475" },
+  { top: "#eef5ff", front: "#3b82f6", side: "#2563eb", stroke: "#1d4ed8" }, // 蓝彩盒
+  { top: "#eaf8f0", front: "#22c55e", side: "#16a34a", stroke: "#15803d" }, // 绿彩盒
+  { top: "#fff7ed", front: "#f97316", side: "#ea580c", stroke: "#c2410c" }, // 橙彩盒
+  { top: "#f5f3ff", front: "#8b5cf6", side: "#7c3aed", stroke: "#6d28d9" }, // 紫彩盒
 ]);
 
-// 纸箱：保留瓦楞纸真实棕色，规格间做明显色调偏移
 const CARTON_COLOR_PALETTE = Object.freeze([
-  { top: "#e8c48a", front: "#c98a48", side: "#a86a32", stroke: "#70451f" },
-  { top: "#d4a86a", front: "#a86f38", side: "#885528", stroke: "#5c3818" },
-  { top: "#c9b07a", front: "#a88850", side: "#886838", stroke: "#5a4424" },
-  { top: "#efb870", front: "#d08a40", side: "#b06a28", stroke: "#7a4818" },
-  { top: "#b89560", front: "#957040", side: "#785828", stroke: "#4e3818" },
-  { top: "#dbc070", front: "#b89045", side: "#987030", stroke: "#684820" },
+  { top: "#e6c48a", front: "#c99552", side: "#a87434", stroke: "#7a4e1c" }, // 浅牛皮
+  { top: "#b07a3c", front: "#8a5524", side: "#6b3f18", stroke: "#3f240e" }, // 深牛皮
+  { top: "#d4a86a", front: "#ae7540", side: "#8f5b30", stroke: "#65401f" },
+  { top: "#9a6840", front: "#7a4c28", side: "#5c3818", stroke: "#3a2410" },
 ]);
+
+/** 固定规格色，确保混装场景一眼可辨 */
+export const SPEC_COLOR_BY_KEY = Object.freeze({
+  "PROD-BOX-S": { top: "#eef5ff", front: "#3b82f6", side: "#2563eb", stroke: "#1d4ed8" },
+  "PROD-BOX-M": { top: "#eaf8f0", front: "#22c55e", side: "#16a34a", stroke: "#15803d" },
+  "PROD-CTN-M": { top: "#e8c990", front: "#c99555", side: "#a87435", stroke: "#7a4e1f" },
+  "PROD-CTN-L": { top: "#a87438", front: "#7a4c22", side: "#5c3818", stroke: "#3a220e" },
+  "PROD-S": { top: "#eef5ff", front: "#3b82f6", side: "#2563eb", stroke: "#1d4ed8" },
+  "PROD-M": { top: "#eaf8f0", front: "#22c55e", side: "#16a34a", stroke: "#15803d" },
+  "PROD-L": { top: "#e8c990", front: "#c99555", side: "#a87435", stroke: "#7a4e1f" },
+  "PROD-XL": { top: "#a87438", front: "#7a4c22", side: "#5c3818", stroke: "#3a220e" },
+});
 
 export const LAYER_COLOR_PALETTE = Object.freeze([
   { top: "#f3cf96", front: "#dfaa69", side: "#c98d50", stroke: "#a8753f" },
@@ -227,11 +233,13 @@ export function createPackagePalletPreviewSceneData({
         const productKey = resolveBoxProductKey(box);
         const packageMode = normalizePackageMode(box.packageMode || box.package_mode);
         const layout = normalizeBoxLayout(box);
-        const colors = getColorByKey(
-          colorMap,
-          `${packageMode}:${productKey}`,
-          packageMode === "carton" ? CARTON_COLOR_PALETTE : BOX_COLOR_PALETTE
-        );
+        const colors = SPEC_COLOR_BY_KEY[productKey]
+          ? SPEC_COLOR_BY_KEY[productKey]
+          : getColorByKey(
+              colorMap,
+              `${packageMode}:${productKey}`,
+              packageMode === "carton" ? CARTON_COLOR_PALETTE : BOX_COLOR_PALETTE
+            );
         const cartonTapeVisible = toBoolean(
           box.cartonTapeVisible ?? box.carton_tape_visible,
           toBoolean(showCartonTape, true)

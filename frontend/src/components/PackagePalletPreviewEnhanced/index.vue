@@ -94,24 +94,6 @@
           <span>箱 <b>{{ cartonModeCount }}</b></span>
         </div>
       </div>
-      <aside v-if="legendItems.length" class="ppe-legend" aria-label="规格图例">
-        <header>规格图例 <small>点击高亮</small></header>
-        <button
-          v-for="item in legendItems"
-          :key="item.key"
-          type="button"
-          class="ppe-legend__item"
-          :class="{ active: legendFilterKey === item.key, dim: legendFilterKey && legendFilterKey !== item.key }"
-          @click="toggleLegendFilter(item.key)"
-        >
-          <i class="ppe-legend__swatch" :style="{ background: item.swatch }"></i>
-          <span class="ppe-legend__text">
-            <b>{{ item.label }}</b>
-            <em>{{ item.modeLabel }} · {{ item.size }} · ×{{ item.count }}</em>
-          </span>
-        </button>
-        <button v-if="legendFilterKey" type="button" class="ppe-legend__clear" @click="legendFilterKey = null">显示全部</button>
-      </aside>
       <div v-if="sceneData" class="ppe-ruler" aria-hidden="true">
         <div class="ppe-ruler__track"><div class="ppe-ruler__fill" :style="{ height: rulerFillPct + '%' }"></div></div>
         <div class="ppe-ruler__labels"><span>{{ fmtNum(heightLimit) }}</span><span>{{ fmtNum(stackHeightHud) }}</span><span>0</span></div>
@@ -128,6 +110,32 @@
         <button type="button" @click="clearBoxSelection">关闭</button>
       </aside>
     </div>
+
+    <aside v-if="sceneData && legendItems.length" class="ppe-legend-bar" aria-label="规格图例">
+      <div class="ppe-legend-bar__head">
+        <strong>规格图例</strong>
+        <button type="button" class="ppe-legend-bar__toggle" @click="legendCollapsed = !legendCollapsed">
+          {{ legendCollapsed ? '展开' : '折叠' }}
+        </button>
+        <button v-if="legendFilterKey" type="button" class="ppe-legend__clear" @click="legendFilterKey = null">显示全部</button>
+      </div>
+      <div v-show="!legendCollapsed" class="ppe-legend-bar__items">
+        <button
+          v-for="item in legendItems"
+          :key="item.key"
+          type="button"
+          class="ppe-legend__item"
+          :class="{ active: legendFilterKey === item.key, dim: legendFilterKey && legendFilterKey !== item.key }"
+          @click="toggleLegendFilter(item.key)"
+        >
+          <i class="ppe-legend__swatch" :style="{ background: item.swatch }"></i>
+          <span class="ppe-legend__text">
+            <b>{{ item.label }}</b>
+            <em>{{ item.modeLabel }} · {{ item.size }} · ×{{ item.count }}</em>
+          </span>
+        </button>
+      </div>
+    </aside>
 
     <div v-if="sceneData" class="ppe-toolbar">
       <div class="ppe-toolbar__group">
@@ -192,7 +200,7 @@ import {
   isBrakeDiscAssetLoadSettled,
   loadBrakeDiscAsset,
 } from "./brakeDiscAsset";
-import { PALLET_COLORS, LAYER_COLOR_PALETTE, createPackagePalletPreviewSceneData } from "./geometry";
+import { PALLET_COLORS, LAYER_COLOR_PALETTE, SPEC_COLOR_BY_KEY, createPackagePalletPreviewSceneData } from "./geometry";
 
 const MIN_CAMERA_ZOOM = 0.75;
 const MAX_CAMERA_ZOOM = 1.6;
@@ -388,6 +396,7 @@ const legendItems = computed(() => {
     const key = String(b.productKey || b.productLabel || "unknown");
     if (!map.has(key)) {
       const mode = String(b.packageMode || "box").toLowerCase();
+      const fixed = SPEC_COLOR_BY_KEY[key];
       map.set(key, {
         key,
         label: b.productLabel || b.productKey || key,
@@ -395,7 +404,7 @@ const legendItems = computed(() => {
         modeLabel: mode === "carton" ? "箱" : mode === "virtual" ? "虚拟" : "盒",
         size: `${Math.round(b.length || b.boxLength || 0)}×${Math.round(b.width || b.boxWidth || 0)}×${Math.round(b.height || b.boxHeight || 0)}`,
         count: 0,
-        swatch: (b.colors && b.colors.front) || "#dfaa69",
+        swatch: (fixed && fixed.front) || (b.colors && b.colors.front) || "#dfaa69",
       });
     }
     map.get(key).count += 1;
@@ -466,11 +475,10 @@ function applyEnhancementVisibility() {
     if (entry.home) {
       entry.mesh.position.copy(entry.home);
       if (explode > 0) {
-        // 层间拉开 + 同层按索引轻微错位，混装单层也能看出爆炸
-        const i = entry.index;
-        entry.mesh.position.y = entry.home.y + (entry.layer - 1) * explode * 100 + (i % 5) * explode * 28;
-        entry.mesh.position.x = entry.home.x + ((i % 3) - 1) * explode * 55;
-        entry.mesh.position.z = entry.home.z + ((((i / 3) | 0) % 3) - 1) * explode * 45;
+        // 按层垂直拉开（观感像分层爆炸，而非装托半途悬空）
+        entry.mesh.position.y = entry.home.y + (entry.layer - 1) * explode * 140;
+        entry.mesh.position.x = entry.home.x * (1 + explode * 0.08);
+        entry.mesh.position.z = entry.home.z * (1 + explode * 0.08);
       }
     }
     const selected = selectedInfo.value && selectedInfo.value.index === entry.index;
@@ -772,11 +780,11 @@ function rebuildThreeScene() {
   positionCameraForScene(rootGroup.userData.cameraFrame);
   trackedBoxes.value = boxMeshEntries.map((e) => e.box);
   selectedInfo.value = null;
-  animIndex.value = 0;
-  playing.value = boxMeshEntries.length > 0;
+  // 默认展示完整装托结果，避免截图/首屏卡在半透明动画中间态
+  animIndex.value = boxMeshEntries.length;
+  playing.value = false;
   applyEnhancementVisibility();
   renderThreeScene();
-  if (playing.value) startAnimLoop();
 
   if (
     !isBrakeDiscAssetLoadSettled() &&
@@ -908,11 +916,8 @@ function createPalletSceneGroup(scene) {
     scene.pallet,
     scene.boxes.filter((box) => box.packageMode === "virtual")
   );
-  addCartonTopDetails(
-    group,
-    scene.pallet,
-    scene.boxes.filter((box) => box.packageMode === "carton")
-  );
+  // 胶带/盖口改挂在各箱 mesh 子节点上，便于爆炸位移与图例过滤同步
+  // addCartonTopDetails(...);
   return group;
 }
 
@@ -1051,20 +1056,43 @@ function addPackageBoxMesh(group, pallet, box) {
     edgeOpacity: box.selected ? 0.9 : 0.46,
     selected: box.selected,
   });
-  // 彩盒：顶面色带（无胶带）；纸箱靠 addCartonTopDetails 胶带区分
+  // 彩盒：顶面品牌色带（无胶带）
   if (box.packageMode !== "carton" && box.packageMode !== "virtual") {
     const bandW = box.length * 0.92;
-    const bandD = Math.max(8, box.width * 0.12);
-    const bandGeo = new THREE.BoxGeometry(bandW, 2.2, bandD);
+    const bandD = Math.max(8, box.width * 0.14);
+    const bandGeo = new THREE.BoxGeometry(bandW, 2.4, bandD);
     const bandMat = new THREE.MeshStandardMaterial({
-      color: colors.stroke,
-      roughness: 0.72,
-      metalness: 0.04,
+      color: colors.front,
+      roughness: 0.62,
+      metalness: 0.05,
     });
     const band = new THREE.Mesh(bandGeo, bandMat);
-    band.position.set(0, box.height / 2 + 1.2, 0);
+    band.position.set(0, box.height / 2 + 1.3, 0);
     band.castShadow = false;
     mesh.add(band);
+  }
+  // 纸箱：封箱胶带挂在箱 mesh 上（随爆炸/过滤一起动）
+  if (box.packageMode === "carton" && box.cartonTapeVisible !== false) {
+    const tapeW = Math.max(28, Math.min(box.width * 0.28, 84));
+    const tapeGeo = new THREE.BoxGeometry(box.length * 0.98, 2.4, tapeW);
+    const tapeMat = new THREE.MeshStandardMaterial({
+      color: "#e8d7a8",
+      roughness: 0.78,
+      metalness: 0.02,
+    });
+    const tape = new THREE.Mesh(tapeGeo, tapeMat);
+    tape.position.set(0, box.height / 2 + 1.4, 0);
+    tape.castShadow = false;
+    mesh.add(tape);
+    // 两侧下垂胶带
+    const dropH = Math.max(30, Math.min(box.height * 0.28, 80));
+    const dropGeo = new THREE.BoxGeometry(tapeW * 0.9, dropH, 2.2);
+    [-1, 1].forEach((dir) => {
+      const drop = new THREE.Mesh(dropGeo, tapeMat.clone());
+      drop.position.set(0, box.height / 2 - dropH / 2 + 2, dir * (box.width / 2 + 1.2));
+      drop.castShadow = false;
+      mesh.add(drop);
+    });
   }
   // Logistics label sticker on front face (white card, does not recolor carton)
   const labelTex = createSideLabelTexture(box);
@@ -1452,8 +1480,9 @@ function addCuboid(group, { size, position, colors, edgeColor, edgeOpacity = 0.4
 
   const edgeMaterial = createLineMaterial("edge", edgeColor, edgeOpacity);
   const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
-  edges.position.copy(mesh.position);
-  group.add(edges);
+  // 作为子节点：随 mesh 位移/显隐（爆炸、图例过滤）
+  edges.position.set(0, 0, 0);
+  mesh.add(edges);
 
   return mesh;
 }
@@ -1610,15 +1639,22 @@ function positionCameraForScene(stableFrame) {
   activeCameraFrame = box;
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
+  // 按包围盒自适应距离，让货物占画面主体
+  const maxDim = Math.max(size.x, size.y * 1.15, size.z, 0.01);
+  const fovRad = THREE.MathUtils.degToRad(camera.fov || 35);
+  const fitDist = (maxDim * 0.55) / Math.tan(fovRad / 2);
+  const horiz = Math.max(fitDist * 0.95, 2.4);
+  const heightOff = Math.max(fitDist * 0.58, size.y * 0.75 + 0.9);
   const orbitAngle = CAMERA_BASE_AZIMUTH - THREE.MathUtils.degToRad(resolveCameraOrbitAngle());
-  const cameraX = center.x + Math.cos(orbitAngle) * CAMERA_BASE_HORIZONTAL_DISTANCE;
-  const cameraZ = center.z + Math.sin(orbitAngle) * CAMERA_BASE_HORIZONTAL_DISTANCE;
+  const cameraX = center.x + Math.cos(orbitAngle) * horiz;
+  const cameraZ = center.z + Math.sin(orbitAngle) * horiz;
 
-  camera.position.set(cameraX, center.y + CAMERA_BASE_HEIGHT_OFFSET, cameraZ);
-  camera.near = Math.max(0.01, CAMERA_VIEW_DISTANCE / 100);
-  camera.far = CAMERA_VIEW_DISTANCE * 100;
-  camera.lookAt(center.x, center.y + size.y * 0.08, center.z);
-  camera.zoom = resolveResponsiveCameraZoom();
+  camera.position.set(cameraX, center.y + heightOff * 0.55, cameraZ);
+  camera.near = Math.max(0.01, fitDist / 80);
+  camera.far = Math.max(fitDist * 40, 200);
+  camera.lookAt(center.x, center.y + size.y * 0.12, center.z);
+  camera.zoom = clampCameraZoom(Math.max(1.08, resolveResponsiveCameraZoom()));
+  currentZoom.value = camera.zoom;
   camera.updateProjectionMatrix();
 }
 </script>
@@ -1627,8 +1663,10 @@ function positionCameraForScene(stableFrame) {
 .package-pallet-preview {
   position: relative;
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto auto;
   min-width: 0;
   height: 100%;
+  gap: 0;
 }
 
 .package-pallet-preview__rotate-actions {
@@ -1779,45 +1817,46 @@ function positionCameraForScene(stableFrame) {
 .package-pallet-preview { grid-template-rows: 1fr auto auto; }
 
 
-.ppe-legend {
-  position: absolute;
-  top: 54px;
-  right: 12px;
-  z-index: 4;
+.ppe-legend-bar {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 168px;
-  max-width: 220px;
-  max-height: 58%;
-  overflow: auto;
-  padding: 8px;
-  background: rgb(255 255 255 / 92%);
-  border: 1px solid #dfe6f3;
-  border-radius: 12px;
-  box-shadow: 0 8px 18px rgb(39 56 95 / 12%);
-  backdrop-filter: blur(6px);
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
 }
-.ppe-legend header {
+.ppe-legend-bar__head {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 4px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #1e293b;
+  align-items: center;
+  gap: 8px;
 }
-.ppe-legend header small { font-weight: 500; color: #64748b; }
+.ppe-legend-bar__head strong { font-size: 12px; color: #0f172a; }
+.ppe-legend-bar__toggle {
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #475569;
+  cursor: pointer;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+}
+.ppe-legend-bar__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 .ppe-legend__item {
-  display: flex;
+  display: inline-flex;
   gap: 8px;
   align-items: flex-start;
-  width: 100%;
-  padding: 6px 6px;
+  max-width: 240px;
+  padding: 6px 8px;
   text-align: left;
   cursor: pointer;
-  background: transparent;
-  border: 1px solid transparent;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
@@ -1836,8 +1875,7 @@ function positionCameraForScene(stableFrame) {
 .ppe-legend__text b { font-size: 12px; color: #0f172a; line-height: 1.2; }
 .ppe-legend__text em { font-style: normal; font-size: 10px; color: #64748b; line-height: 1.25; }
 .ppe-legend__clear {
-  margin-top: 4px;
-  padding: 4px 8px;
+  padding: 2px 8px;
   font-size: 11px;
   color: #395ef1;
   cursor: pointer;

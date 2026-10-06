@@ -65,39 +65,38 @@ public class MockOrderDataService {
             }
         }
 
-        // 盒箱混装：4 种规格，盒+箱，数量刻意造尾托以便混托合并到同一托
+        // 盒箱混装：大箱先入（底）、小盒后入（上），数量加大以便同托自然叠出 2~3 层
         if ("ORDER-MIX-PACK".equals(orderId)) {
             tasks.clear();
-            // 盒 box：小规格 / 中规格
+            // 纸箱在前 → LinkedHashMap 分组顺序使尾托合并时大箱在底层
             for (int i = 0; i < 4; i++) {
-                tasks.add(box("MP-BOX-S-" + i, "PROD-BOX-S", "彩盒S", bid, "box", 300, 200, 150, 3, true));
+                tasks.add(box("MP-CTN-L-" + i, "PROD-CTN-L", "纸箱L", bid, "carton", 600, 400, 300, 14, true));
             }
-            for (int i = 0; i < 3; i++) {
-                tasks.add(box("MP-BOX-M-" + i, "PROD-BOX-M", "彩盒M", bid, "box", 400, 300, 180, 5, true));
-            }
-            // 箱 carton：中规格 / 大规格（有胶带）
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < 4; i++) {
                 tasks.add(box("MP-CTN-M-" + i, "PROD-CTN-M", "纸箱M", bid, "carton", 500, 400, 250, 10, true));
             }
-            for (int i = 0; i < 2; i++) {
-                tasks.add(box("MP-CTN-L-" + i, "PROD-CTN-L", "纸箱L", bid, "carton", 600, 400, 300, 14, true));
+            for (int i = 0; i < 6; i++) {
+                tasks.add(box("MP-BOX-M-" + i, "PROD-BOX-M", "彩盒M", bid, "box", 400, 300, 180, 5, true));
+            }
+            for (int i = 0; i < 8; i++) {
+                tasks.add(box("MP-BOX-S-" + i, "PROD-BOX-S", "彩盒S", bid, "box", 300, 200, 150, 3, true));
             }
         }
 
-        // 多尺寸混托：同一包装方式，4 种明显不同尺寸
+        // 多尺寸混托：大→小，数量足够叠层
         if ("ORDER-MIX-SIZE".equals(orderId)) {
             tasks.clear();
+            for (int i = 0; i < 3; i++) {
+                tasks.add(box("MS-D-" + i, "PROD-XL", "规格XL", bid, "carton", 700, 500, 320, 16, true));
+            }
             for (int i = 0; i < 4; i++) {
-                tasks.add(box("MS-A-" + i, "PROD-S", "规格S", bid, "box", 250, 200, 150, 2, true));
-            }
-            for (int i = 0; i < 3; i++) {
-                tasks.add(box("MS-B-" + i, "PROD-M", "规格M", bid, "box", 400, 300, 200, 6, true));
-            }
-            for (int i = 0; i < 3; i++) {
                 tasks.add(box("MS-C-" + i, "PROD-L", "规格L", bid, "carton", 550, 400, 280, 11, true));
             }
-            for (int i = 0; i < 2; i++) {
-                tasks.add(box("MS-D-" + i, "PROD-XL", "规格XL", bid, "carton", 700, 500, 320, 16, true));
+            for (int i = 0; i < 6; i++) {
+                tasks.add(box("MS-B-" + i, "PROD-M", "规格M", bid, "box", 400, 300, 200, 6, true));
+            }
+            for (int i = 0; i < 8; i++) {
+                tasks.add(box("MS-A-" + i, "PROD-S", "规格S", bid, "box", 250, 200, 150, 2, true));
             }
         }
 
