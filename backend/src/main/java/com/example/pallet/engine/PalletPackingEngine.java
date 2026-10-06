@@ -18,6 +18,16 @@ public class PalletPackingEngine {
 
     private static final double EPS = 1e-6;
 
+    private PackingConstraints constraints = PackingConstraints.defaults();
+
+    public void setConstraints(PackingConstraints constraints) {
+        this.constraints = constraints == null ? PackingConstraints.defaults() : constraints;
+    }
+
+    public PackingConstraints getConstraints() {
+        return constraints;
+    }
+
     public PalletPackingResult pack(PalletPackingModel.PackingRequest request) {
         validate(request);
         Map<String, List<PalletPackingModel.BoxTask>> grouped = new LinkedHashMap<>();
@@ -49,7 +59,14 @@ public class PalletPackingEngine {
 
         fullPallets.sort(Comparator.comparing(p -> p.palletNo));
         renumber(fullPallets);
-        return toResult(fullPallets, request.getPalletSpec());
+        PalletPackingResult result = toResult(fullPallets, request.getPalletSpec());
+        PackingSupportValidator.Report report =
+                new PackingSupportValidator().validate(result, request.getPalletSpec(), constraints);
+        result.setMinSupportRatio(round4(report.minSupportRatio));
+        if (!report.ok()) {
+            throw new PackingException("装托结果未通过支撑/边界校验: " + report.issues.get(0));
+        }
+        return result;
     }
 
     private void validate(PalletPackingModel.PackingRequest request) {
@@ -93,6 +110,10 @@ public class PalletPackingEngine {
                                                   List<PalletPackingModel.BoxTask> tasks) {
         List<InternalPallet> result = new ArrayList<>();
         List<PalletPackingModel.BoxTask> remaining = new ArrayList<>(tasks);
+        // 重的、大的优先（稳定底托）
+        remaining.sort(Comparator
+                .comparingDouble((PalletPackingModel.BoxTask t) -> -nz(t.getBoxWeight()))
+                .thenComparingDouble(t -> -(nz(t.getBoxLength()) * nz(t.getBoxWidth()) * nz(t.getBoxHeight()))));
         int seq = 1;
         while (!remaining.isEmpty()) {
             InternalPallet pallet = new InternalPallet();
@@ -115,100 +136,379 @@ public class PalletPackingEngine {
         double palletL = spec.getLength();
         double palletW = spec.getWidth();
 
-        // 混托合并时续装：必须继承已有层与重量，否则不同高度会被错误叠到 z=0
         List<Layer> layers = (pallet.layers == null || pallet.layers.isEmpty())
                 ? new ArrayList<>()
                 : new ArrayList<>(pallet.layers);
         double currentWeight = pallet.totalWeight;
 
         while (!remaining.isEmpty()) {
-            PalletPackingModel.BoxTask next = remaining.get(0);
-            Orientation best = chooseOrientation(next, palletL, palletW);
-            if (best == null) {
+            int pick = selectNextTaskIndex(remaining, layers, pallet.boxes, spec, currentWeight);
+            if (pick < 0) {
                 break;
             }
-            if (currentWeight + nz(next.getBoxWeight()) > weightLimit + EPS) {
-                break;
+            PalletPackingModel.BoxTask next = remaining.get(pick);
+            CandidatePlace place = findBestPlace(next, layers, pallet.boxes, spec, currentWeight);
+            if (place == null) {
+                // 该箱放不下：留给后续新托；先尝试其它箱
+                boolean any = false;
+                for (int i = 0; i < remaining.size(); i++) {
+                    if (i == pick) {
+                        continue;
+                    }
+                    CandidatePlace alt = findBestPlace(remaining.get(i), layers, pallet.boxes, spec, currentWeight);
+                    if (alt != null) {
+                        pick = i;
+                        next = remaining.get(i);
+                        place = alt;
+                        any = true;
+                        break;
+                    }
+                }
+                if (!any) {
+                    break;
+                }
             }
 
-            Layer target = null;
-            Placement placement = null;
-            for (Layer layer : layers) {
-                if (Math.abs(layer.layerHeight - best.h) > EPS) {
-                    continue;
-                }
-                placement = findPlacement(layer, best.l, best.w, palletL, palletW);
-                if (placement != null) {
-                    target = layer;
-                    break;
-                }
-            }
+            Layer target = place.layer;
             if (target == null) {
-                double usedHeight = layers.stream().mapToDouble(l -> l.layerHeight).sum();
-                if (usedHeight + best.h > heightLimit + EPS) {
-                    break;
-                }
                 target = new Layer();
                 target.layerNo = layers.size() + 1;
-                target.z = usedHeight;
-                target.layerHeight = best.h;
+                target.z = place.z;
+                target.layerHeight = place.ori.h;
                 layers.add(target);
-                placement = findPlacement(target, best.l, best.w, palletL, palletW);
-                if (placement == null) {
-                    layers.remove(layers.size() - 1);
-                    break;
-                }
             }
-
             PlacedBox box = new PlacedBox();
             box.task = next;
             box.layerNo = target.layerNo;
-            box.x = placement.x;
-            box.y = placement.y;
-            box.z = target.z;
-            box.occupyL = best.l;
-            box.occupyW = best.w;
-            box.occupyH = best.h;
-            box.rotation = best.rotated ? "90" : "0";
+            box.x = place.x;
+            box.y = place.y;
+            box.z = place.z;
+            box.occupyL = place.ori.l;
+            box.occupyW = place.ori.w;
+            box.occupyH = place.ori.h;
+            box.rotation = place.ori.rotated ? "90" : "0";
             target.placed.add(box);
             pallet.boxes.add(box);
             currentWeight += nz(next.getBoxWeight());
-            remaining.remove(0);
+            remaining.remove(pick);
+            pallet.layers = layers;
+            pallet.totalWeight = currentWeight;
+            pallet.totalHeight = layers.stream().mapToDouble(l -> l.layerHeight).sum();
+            // 若层高不一致用真实最高顶
+            double maxTop = pallet.boxes.stream().mapToDouble(b -> b.z + b.occupyH).max().orElse(0);
+            pallet.totalHeight = Math.max(pallet.totalHeight, maxTop);
         }
         pallet.layers = layers;
         pallet.totalWeight = currentWeight;
-        pallet.totalHeight = layers.stream().mapToDouble(l -> l.layerHeight).sum();
+        double maxTop = pallet.boxes.stream().mapToDouble(b -> b.z + b.occupyH).max().orElse(0);
+        pallet.totalHeight = maxTop;
     }
 
-    private Orientation chooseOrientation(PalletPackingModel.BoxTask task, double palletL, double palletW) {
+    /**
+     * 优先补满未铺满且高度匹配的下层；否则按重/大优先。
+     */
+    private int selectNextTaskIndex(List<PalletPackingModel.BoxTask> remaining,
+                                    List<Layer> layers,
+                                    List<PlacedBox> placed,
+                                    PalletPackingModel.PalletSpec spec,
+                                    double currentWeight) {
+        double palletArea = spec.getLength() * spec.getWidth();
+        // 1) 未铺满层：找高度匹配且可放置的
+        for (Layer layer : layers) {
+            double used = layer.placed.stream().mapToDouble(b -> b.occupyL * b.occupyW).sum();
+            if (used >= palletArea * 0.92) {
+                continue;
+            }
+            int best = -1;
+            double bestScore = -1;
+            for (int i = 0; i < remaining.size(); i++) {
+                PalletPackingModel.BoxTask t = remaining.get(i);
+                if (currentWeight + nz(t.getBoxWeight()) > spec.getWeightLimit() + EPS) {
+                    continue;
+                }
+                for (Orientation ori : orientations(t, spec.getLength(), spec.getWidth())) {
+                    if (Math.abs(ori.h - layer.layerHeight) > EPS) {
+                        continue;
+                    }
+                    if (findSupportedPlacement(placed, layer, ori, layer.z, spec) != null) {
+                        double score = nz(t.getBoxWeight()) * 1000 + ori.l * ori.w;
+                        if (score > bestScore) {
+                            bestScore = score;
+                            best = i;
+                        }
+                    }
+                }
+            }
+            if (best >= 0) {
+                return best;
+            }
+        }
+        // 2) 任意可放置（重的优先，列表已排序）
+        for (int i = 0; i < remaining.size(); i++) {
+            if (findBestPlace(remaining.get(i), layers, placed, spec, currentWeight) != null) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private CandidatePlace findBestPlace(PalletPackingModel.BoxTask task,
+                                         List<Layer> layers,
+                                         List<PlacedBox> placed,
+                                         PalletPackingModel.PalletSpec spec,
+                                         double currentWeight) {
+        if (currentWeight + nz(task.getBoxWeight()) > spec.getWeightLimit() + EPS) {
+            return null;
+        }
+        List<Orientation> oris = orientations(task, spec.getLength(), spec.getWidth());
+        if (oris.isEmpty()) {
+            return null;
+        }
+        CandidatePlace best = null;
+        // 先尝试已有同高层（补满）
+        for (Layer layer : layers) {
+            for (Orientation ori : oris) {
+                if (Math.abs(ori.h - layer.layerHeight) > EPS) {
+                    continue;
+                }
+                Placement p = findSupportedPlacement(placed, layer, ori, layer.z, spec);
+                if (p != null) {
+                    CandidatePlace c = new CandidatePlace(layer, ori, p.x, p.y, layer.z);
+                    if (best == null || c.ori.l * c.ori.w > best.ori.l * best.ori.w) {
+                        best = c;
+                    }
+                }
+            }
+        }
+        if (best != null) {
+            return best;
+        }
+        // 新开层：支撑面高度 = 当前堆顶相关平台；尝试在 maxTop 上开层
+        double sitZ = placed.isEmpty() ? 0 : placed.stream().mapToDouble(b -> b.z + b.occupyH).max().orElse(0);
+        // 也允许在已有层顶高度集合上开层（多平台）
+        java.util.TreeSet<Double> tops = new java.util.TreeSet<>();
+        tops.add(0.0);
+        for (PlacedBox b : placed) {
+            tops.add(round2(b.z + b.occupyH));
+        }
+        for (double z : tops) {
+            if (z > sitZ + EPS) {
+                continue; // 只在不超过当前最高顶的平台上试；优先较低平台
+            }
+            for (Orientation ori : oris) {
+                if (z + ori.h > spec.getCargoHeightLimit() + EPS) {
+                    continue;
+                }
+                Placement p = findSupportedPlacement(placed, null, ori, z, spec);
+                if (p != null) {
+                    return new CandidatePlace(null, ori, p.x, p.y, z);
+                }
+            }
+        }
+        // 若较低平台放不下，再试最高顶
+        for (Orientation ori : oris) {
+            if (sitZ + ori.h > spec.getCargoHeightLimit() + EPS) {
+                continue;
+            }
+            Placement p = findSupportedPlacement(placed, null, ori, sitZ, spec);
+            if (p != null) {
+                return new CandidatePlace(null, ori, p.x, p.y, sitZ);
+            }
+        }
+        return null;
+    }
+
+    private List<Orientation> orientations(PalletPackingModel.BoxTask task, double palletL, double palletW) {
         double l = task.getBoxLength();
         double w = task.getBoxWidth();
         double h = task.getBoxHeight();
         List<Orientation> options = new ArrayList<>();
-        if (l <= palletL + EPS && w <= palletW + EPS) {
+        double overhang = constraints.getMaxOverhangMm();
+        if (l <= palletL + overhang + EPS && w <= palletW + overhang + EPS) {
             options.add(new Orientation(l, w, h, false));
         }
-        if (task.isAllowRotate() && w <= palletL + EPS && l <= palletW + EPS) {
+        if (task.isAllowRotate() && w <= palletL + overhang + EPS && l <= palletW + overhang + EPS) {
             options.add(new Orientation(w, l, h, true));
         }
-        if (options.isEmpty()) {
-            return null;
-        }
-        // 优先更“方正”且长边贴合托盘长边
         options.sort(Comparator
                 .comparingDouble((Orientation o) -> -(o.l * o.w))
                 .thenComparing(o -> o.rotated));
-        return options.get(0);
+        return options;
+    }
+
+    private Orientation chooseOrientation(PalletPackingModel.BoxTask task, double palletL, double palletW) {
+        List<Orientation> options = orientations(task, palletL, palletW);
+        return options.isEmpty() ? null : options.get(0);
+    }
+
+    private Placement findSupportedPlacement(List<PlacedBox> all,
+                                             Layer sameLayer,
+                                             Orientation ori,
+                                             double sitZ,
+                                             PalletPackingModel.PalletSpec spec) {
+        double palletL = spec.getLength();
+        double palletW = spec.getWidth();
+        double overhang = constraints.getMaxOverhangMm();
+        List<double[]> candidates = new ArrayList<>();
+        candidates.add(new double[]{0, 0});
+        List<PlacedBox> sameZ = new ArrayList<>();
+        for (PlacedBox b : all) {
+            if (sameLayer != null && sameLayer.placed.contains(b)) {
+                sameZ.add(b);
+            } else if (Math.abs(b.z - sitZ) < constraints.getSupportZTolerance()) {
+                sameZ.add(b);
+            }
+        }
+        for (PlacedBox existing : sameZ) {
+            candidates.add(new double[]{existing.x + existing.occupyL, existing.y});
+            candidates.add(new double[]{existing.x, existing.y + existing.occupyW});
+            candidates.add(new double[]{existing.x + existing.occupyL, existing.y + existing.occupyW});
+        }
+        // 支撑箱顶的角点也可作为候选
+        for (PlacedBox lower : all) {
+            double top = lower.z + lower.occupyH;
+            if (Math.abs(top - sitZ) > constraints.getSupportZTolerance()) {
+                continue;
+            }
+            candidates.add(new double[]{lower.x, lower.y});
+            candidates.add(new double[]{lower.x + lower.occupyL - ori.l, lower.y});
+            candidates.add(new double[]{lower.x, lower.y + lower.occupyW - ori.w});
+            candidates.add(new double[]{lower.x + lower.occupyL - ori.l, lower.y + lower.occupyW - ori.w});
+        }
+        candidates.sort(Comparator.comparingDouble((double[] c) -> c[1]).thenComparingDouble(c -> c[0]));
+        Placement found = null;
+        double bestSupport = -1;
+        for (double[] c : candidates) {
+            double x = Math.max(-overhang, c[0]);
+            double y = Math.max(-overhang, c[1]);
+            if (!fitsBounds(x, y, ori.l, ori.w, palletL, palletW, overhang)) {
+                continue;
+            }
+            if (collidesVolume(all, x, y, sitZ, ori.l, ori.w, ori.h)) {
+                continue;
+            }
+            double ratio = computeSupportRatio(all, x, y, ori.l, ori.w, sitZ);
+            if (ratio + EPS < constraints.getMinSupportRatio()) {
+                continue;
+            }
+            if (!isCentroidSupported(all, x, y, ori.l, ori.w, sitZ)) {
+                continue;
+            }
+            if (ratio > bestSupport + EPS || (Math.abs(ratio - bestSupport) <= EPS && found != null
+                    && (x + y < found.x + found.y))) {
+                bestSupport = ratio;
+                found = new Placement(x, y);
+            }
+            if (bestSupport >= 0.999) {
+                break;
+            }
+        }
+        if (found != null) {
+            return found;
+        }
+        // 网格兜底
+        double step = 20;
+        for (double y = 0; y + ori.w <= palletW + overhang + EPS; y += step) {
+            for (double x = 0; x + ori.l <= palletL + overhang + EPS; x += step) {
+                if (!fitsBounds(x, y, ori.l, ori.w, palletL, palletW, overhang)) {
+                    continue;
+                }
+                if (collidesVolume(all, x, y, sitZ, ori.l, ori.w, ori.h)) {
+                    continue;
+                }
+                double ratio = computeSupportRatio(all, x, y, ori.l, ori.w, sitZ);
+                if (ratio + EPS < constraints.getMinSupportRatio()) {
+                    continue;
+                }
+                if (!isCentroidSupported(all, x, y, ori.l, ori.w, sitZ)) {
+                    continue;
+                }
+                return new Placement(x, y);
+            }
+        }
+        return null;
+    }
+
+    private boolean fitsBounds(double x, double y, double l, double w,
+                               double palletL, double palletW, double overhang) {
+        return x >= -overhang - EPS && y >= -overhang - EPS
+                && x + l <= palletL + overhang + EPS
+                && y + w <= palletW + overhang + EPS;
+    }
+
+    private double computeSupportRatio(List<PlacedBox> all, double x, double y, double l, double w, double sitZ) {
+        double area = l * w;
+        if (area <= EPS) {
+            return 1;
+        }
+        if (sitZ <= constraints.getSupportZTolerance()) {
+            return 1.0;
+        }
+        double supported = 0;
+        for (PlacedBox lower : all) {
+            double top = lower.z + lower.occupyH;
+            if (Math.abs(top - sitZ) > constraints.getSupportZTolerance()) {
+                continue;
+            }
+            double left = Math.max(x, lower.x);
+            double right = Math.min(x + l, lower.x + lower.occupyL);
+            double front = Math.max(y, lower.y);
+            double back = Math.min(y + w, lower.y + lower.occupyW);
+            if (right > left + EPS && back > front + EPS) {
+                supported += (right - left) * (back - front);
+            }
+        }
+        return Math.min(1.0, supported / area);
+    }
+
+    private boolean isCentroidSupported(List<PlacedBox> all, double x, double y, double l, double w, double sitZ) {
+        if (sitZ <= constraints.getSupportZTolerance()) {
+            return true;
+        }
+        double cx = x + l / 2;
+        double cy = y + w / 2;
+        for (PlacedBox lower : all) {
+            double top = lower.z + lower.occupyH;
+            if (Math.abs(top - sitZ) > constraints.getSupportZTolerance()) {
+                continue;
+            }
+            if (cx >= lower.x - EPS && cx <= lower.x + lower.occupyL + EPS
+                    && cy >= lower.y - EPS && cy <= lower.y + lower.occupyW + EPS) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean collidesVolume(List<PlacedBox> all, double x, double y, double z,
+                                   double l, double w, double h) {
+        for (PlacedBox b : all) {
+            boolean ox = x < b.x + b.occupyL - EPS && x + l > b.x + EPS;
+            boolean oy = y < b.y + b.occupyW - EPS && y + w > b.y + EPS;
+            boolean oz = z < b.z + b.occupyH - EPS && z + h > b.z + EPS;
+            if (ox && oy && oz) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Placement findPlacement(Layer layer, double boxL, double boxW, double palletL, double palletW) {
+        // 兼容 isTail：同层无支撑检查的快速探测（尾托判定）
+        Orientation ori = new Orientation(boxL, boxW, layer.layerHeight, false);
+        PalletPackingModel.PalletSpec spec = new PalletPackingModel.PalletSpec();
+        spec.setLength(palletL);
+        spec.setWidth(palletW);
+        spec.setWeightLimit(1e12);
+        spec.setCargoHeightLimit(1e12);
+        // 构造临时 all = layer.placed only for collision; support uses empty below if z>0 may fail
+        // isTail only needs free XY slot on same layer
         List<double[]> candidates = new ArrayList<>();
         candidates.add(new double[]{0, 0});
         for (PlacedBox existing : layer.placed) {
             candidates.add(new double[]{existing.x + existing.occupyL, existing.y});
             candidates.add(new double[]{existing.x, existing.y + existing.occupyW});
         }
-        candidates.sort(Comparator.comparingDouble((double[] c) -> c[1]).thenComparingDouble(c -> c[0]));
         for (double[] c : candidates) {
             double x = c[0];
             double y = c[1];
@@ -217,15 +517,6 @@ public class PalletPackingEngine {
             }
             if (!collides(layer.placed, x, y, boxL, boxW)) {
                 return new Placement(x, y);
-            }
-        }
-        // 网格扫描兜底
-        double step = 10;
-        for (double y = 0; y + boxW <= palletW + EPS; y += step) {
-            for (double x = 0; x + boxL <= palletL + EPS; x += step) {
-                if (!collides(layer.placed, x, y, boxL, boxW)) {
-                    return new Placement(x, y);
-                }
             }
         }
         return null;
@@ -540,6 +831,20 @@ public class PalletPackingEngine {
             return String.valueOf((long) Math.rint(v));
         }
         return String.valueOf(round2(v));
+    }
+
+    private static class CandidatePlace {
+        final Layer layer;
+        final Orientation ori;
+        final double x, y, z;
+
+        CandidatePlace(Layer layer, Orientation ori, double x, double y, double z) {
+            this.layer = layer;
+            this.ori = ori;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
     }
 
     private static class Orientation {

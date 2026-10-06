@@ -88,12 +88,12 @@ cd backend && mvn -q test -Dtest=PalletPackingBenchmarkTest
 |------|------------|--------------|-----------------|------------|--------------|------------|--------------|
 | single-12x400 | 1 | 1 | 2 | 0.750 | 0.750 | 0.250 | 0.250 |
 | weight-tight-36 | 3 | 3 | 6 | 0.750 | 0.750 | 0.214 | 0.214 |
-| mixed-sku-sizes | 1 | 2 | 5 | 0.562 | 0.624 | 0.671 | 0.335 |
+| mixed-sku-sizes | 2 | 3 | 6 | 0.768 | 0.355 | 0.335 | 0.224 |
 | tail-merge-like | 1 | 1 | 3 | 1.000 | 0.833 | 0.625 | 0.625 |
 | bulk-96 | 4 | 4 | 24 | 0.694 | 0.694 | 0.579 | 0.579 |
 | height-tight-40 | 4 | 4 | 20 | 0.688 | 0.688 | 0.500 | 0.500 |
 
-说明：均匀箱体场景下 Engine 与 FirstFit 托数常接近（诚实结果）；**混规格**（mixed-sku-sizes）Engine 1 托 vs FirstFit 2 托，体积利用率 0.671 vs 0.335。相对 Naive 下限，托数优势显著（如 bulk-96：4 vs 24）。
+说明：v11 起 Engine/FirstFit/Naive 均须通过支撑校验（≥80%）。均匀箱体场景托数仍接近；**混规格**（mixed-sku-sizes）Engine 2 托 vs FirstFit 3 托 vs Naive 6 托。bulk-96：4 vs 4 vs 24。
 
 ![benchmark overview](docs/benchmark-overview.png)
 
@@ -147,6 +147,12 @@ GitHub Actions：仓库内已准备 `.github/workflows/ci.yml`（`mvn test` + `n
 
 仅供学习与作业演示，禁止用于还原生产敏感数据或未授权商业使用。
 
+
+## v11 支撑约束
+
+- 最小支撑率默认 **80%**，重心须落在支撑区内；默认不允许超边
+- `PackingSupportValidator` 校验重叠/悬空/超边/超重超高；引擎与 FirstFit/Naive 基线均须通过
+- `fillPallet` 按支撑面放置；下层未满优先补满；重/大优先
 
 ## v10 混装三维演示
 

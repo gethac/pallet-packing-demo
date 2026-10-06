@@ -98,6 +98,14 @@ public class LayerFirstFitPacker {
                         // layer full
                         break;
                     }
+                    // 支撑约束：与主引擎一致（80% + 重心）
+                    if (layerZ > 1e-6) {
+                        double ratio = supportRatioAt(boxes, palletNo, cursorX, rowY, l, w, layerZ);
+                        if (ratio + 1e-6 < 0.80 || !centroidSupported(boxes, palletNo, cursorX, rowY, l, w, layerZ)) {
+                            // 本层该位置无足够支撑 → 结束本层
+                            break;
+                        }
+                    }
 
                     PalletPackingResult.BoxResult br = new PalletPackingResult.BoxResult();
                     br.setPalletNo(palletNo);
@@ -161,7 +169,46 @@ public class LayerFirstFitPacker {
         result.setBoxList(boxes);
         result.setAvgAreaUtilization(round4(items.stream().mapToDouble(i -> nz(i.getAreaUtilization())).average().orElse(0)));
         result.setAvgHeightUtilization(round4(items.stream().mapToDouble(i -> nz(i.getHeightUtilization())).average().orElse(0)));
+        PackingSupportValidator.Report report =
+                new PackingSupportValidator().validate(result, spec, PackingConstraints.defaults());
+        result.setMinSupportRatio(round4(report.minSupportRatio));
+        if (!report.ok()) {
+            throw new PackingException("FirstFit 结果未通过支撑校验: " + report.issues.get(0));
+        }
         return result;
+    }
+
+    private static double supportRatioAt(List<PalletPackingResult.BoxResult> all, String palletNo,
+                                         double x, double y, double l, double w, double sitZ) {
+        double area = l * w;
+        if (area <= 1e-9) return 1;
+        double supported = 0;
+        for (PalletPackingResult.BoxResult lower : all) {
+            if (!palletNo.equals(String.valueOf(lower.getPalletNo()))) continue;
+            double top = nz(lower.getPositionZ()) + nz(lower.getOccupyHeight());
+            if (Math.abs(top - sitZ) > 1e-3) continue;
+            double left = Math.max(x, nz(lower.getPositionX()));
+            double right = Math.min(x + l, nz(lower.getPositionX()) + nz(lower.getOccupyLength()));
+            double front = Math.max(y, nz(lower.getPositionY()));
+            double back = Math.min(y + w, nz(lower.getPositionY()) + nz(lower.getOccupyWidth()));
+            if (right > left && back > front) supported += (right - left) * (back - front);
+        }
+        return Math.min(1.0, supported / area);
+    }
+
+    private static boolean centroidSupported(List<PalletPackingResult.BoxResult> all, String palletNo,
+                                             double x, double y, double l, double w, double sitZ) {
+        double cx = x + l / 2, cy = y + w / 2;
+        for (PalletPackingResult.BoxResult lower : all) {
+            if (!palletNo.equals(String.valueOf(lower.getPalletNo()))) continue;
+            double top = nz(lower.getPositionZ()) + nz(lower.getOccupyHeight());
+            if (Math.abs(top - sitZ) > 1e-3) continue;
+            double lx = nz(lower.getPositionX()), ly = nz(lower.getPositionY());
+            if (cx >= lx && cx <= lx + nz(lower.getOccupyLength()) && cy >= ly && cy <= ly + nz(lower.getOccupyWidth())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static double nz(Double v) { return v == null ? 0 : v; }

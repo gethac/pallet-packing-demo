@@ -14,6 +14,8 @@ public class PalletPackingResult {
     private String hasMixedGroup = "0";
     private Double avgAreaUtilization = 0D;
     private Double avgHeightUtilization = 0D;
+    /** 全方案箱体支撑率最小值 */
+    private Double minSupportRatio = 1D;
     private List<GroupResult> groupList = new ArrayList<>();
     private List<ItemResult> itemList = new ArrayList<>();
     private List<BoxResult> boxList = new ArrayList<>();

@@ -36,6 +36,8 @@ public class NaiveStackPacker {
             int boxCount = 0;
             double maxL = 0;
             double maxW = 0;
+            double prevL = 0;
+            double prevW = 0;
             while (i < tasks.size()) {
                 PalletPackingModel.BoxTask t = tasks.get(i);
                 double l = t.getBoxLength();
@@ -53,6 +55,14 @@ public class NaiveStackPacker {
                 }
                 if (z + h > heightLimit + 1e-6 || weight + bw > weightLimit + 1e-6) {
                     break;
+                }
+                // 支撑：上层底面至少 80% 落在下层顶面（单列对齐原点）
+                if (z > 1e-6) {
+                    double inter = Math.min(l, prevL) * Math.min(w, prevW);
+                    double ratio = inter / (l * w);
+                    if (ratio + 1e-6 < 0.80) {
+                        break; // 新开托
+                    }
                 }
                 layer++;
                 PalletPackingResult.BoxResult br = new PalletPackingResult.BoxResult();
@@ -80,6 +90,8 @@ public class NaiveStackPacker {
                 boxCount++;
                 maxL = Math.max(maxL, l);
                 maxW = Math.max(maxW, w);
+                prevL = l;
+                prevW = w;
                 i++;
             }
             if (boxCount == 0) {
@@ -108,6 +120,12 @@ public class NaiveStackPacker {
         double avgH = items.stream().mapToDouble(PalletPackingResult.ItemResult::getHeightUtilization).average().orElse(0);
         result.setAvgAreaUtilization(avgA);
         result.setAvgHeightUtilization(avgH);
+        PackingSupportValidator.Report report =
+                new PackingSupportValidator().validate(result, request.getPalletSpec(), PackingConstraints.defaults());
+        result.setMinSupportRatio(Math.round(report.minSupportRatio * 10000.0) / 10000.0);
+        if (!report.ok()) {
+            throw new PackingException("Naive 结果未通过支撑校验: " + report.issues.get(0));
+        }
         return result;
     }
 }

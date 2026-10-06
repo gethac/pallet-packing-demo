@@ -3,6 +3,8 @@ package com.example.pallet.benchmark;
 import com.example.pallet.engine.LayerFirstFitPacker;
 import com.example.pallet.engine.NaiveStackPacker;
 import com.example.pallet.engine.PalletPackingEngine;
+import com.example.pallet.engine.PackingConstraints;
+import com.example.pallet.engine.PackingSupportValidator;
 import com.example.pallet.engine.PalletPackingModel;
 import com.example.pallet.engine.PalletPackingResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -92,6 +94,15 @@ class PalletPackingBenchmarkTest {
         double palletW = s.request.getPalletSpec().getWidth();
         double heightLimit = s.request.getPalletSpec().getCargoHeightLimit();
 
+        PackingSupportValidator validator = new PackingSupportValidator();
+        PackingConstraints constraints = PackingConstraints.defaults();
+        PackingSupportValidator.Report engRep = validator.validate(er, s.request.getPalletSpec(), constraints);
+        PackingSupportValidator.Report ffRep = validator.validate(fr, s.request.getPalletSpec(), constraints);
+        PackingSupportValidator.Report naiveRep = validator.validate(nr, s.request.getPalletSpec(), constraints);
+        assertTrue(engRep.ok(), () -> s.name + " engine support fail: " + engRep.issues);
+        assertTrue(ffRep.ok(), () -> s.name + " firstFit support fail: " + ffRep.issues);
+        assertTrue(naiveRep.ok(), () -> s.name + " naive support fail: " + naiveRep.issues);
+
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("name", s.name);
         row.put("boxCount", s.request.getBoxTaskList().size());
@@ -113,6 +124,9 @@ class PalletPackingBenchmarkTest {
         row.put("naiveMs", naiveMs);
         row.put("palletsSavedVsFirstFit", fr.getTotalPalletCount() - er.getTotalPalletCount());
         row.put("palletsSavedVsNaive", nr.getTotalPalletCount() - er.getTotalPalletCount());
+        row.put("engineMinSupport", engRep.minSupportRatio);
+        row.put("firstFitMinSupport", ffRep.minSupportRatio);
+        row.put("naiveMinSupport", naiveRep.minSupportRatio);
         return row;
     }
 

@@ -92,6 +92,7 @@
           <span>规格 <b>{{ legendItems.length }}</b></span>
           <span>盒 <b>{{ boxModeCount }}</b></span>
           <span>箱 <b>{{ cartonModeCount }}</b></span>
+          <span>最小支撑率 <b>{{ fmtPct(minSupportHud) }}</b></span>
         </div>
       </div>
       <div v-if="sceneData" class="ppe-ruler" aria-hidden="true">
@@ -390,6 +391,39 @@ const boxModeCount = computed(() =>
 const cartonModeCount = computed(() =>
   trackedBoxes.value.filter((b) => String(b.packageMode || "").toLowerCase() === "carton").length
 );
+const minSupportHud = computed(() => {
+  const boxes = trackedBoxes.value;
+  if (!boxes.length) return 1;
+  let min = 1;
+  const zTol = 1e-3;
+  for (const upper of boxes) {
+    const az = Number(upper.positionZ || upper.z || 0);
+    const al = Number(upper.length || upper.occupyLength || upper.boxLength || 0);
+    const aw = Number(upper.width || upper.occupyWidth || upper.boxWidth || 0);
+    const ax = Number(upper.positionX ?? upper.x ?? 0);
+    const ay = Number(upper.positionY ?? upper.y ?? 0);
+    const area = al * aw;
+    if (area <= 0) continue;
+    if (az <= zTol) continue;
+    let supported = 0;
+    for (const lower of boxes) {
+      if (lower === upper) continue;
+      const top = Number(lower.positionZ || lower.z || 0) + Number(lower.height || lower.occupyHeight || lower.boxHeight || 0);
+      if (Math.abs(top - az) > zTol) continue;
+      const lx = Number(lower.positionX ?? lower.x ?? 0);
+      const ly = Number(lower.positionY ?? lower.y ?? 0);
+      const ll = Number(lower.length || lower.occupyLength || lower.boxLength || 0);
+      const lw = Number(lower.width || lower.occupyWidth || lower.boxWidth || 0);
+      const left = Math.max(ax, lx);
+      const right = Math.min(ax + al, lx + ll);
+      const front = Math.max(ay, ly);
+      const back = Math.min(ay + aw, ly + lw);
+      if (right > left && back > front) supported += (right - left) * (back - front);
+    }
+    min = Math.min(min, Math.min(1, supported / area));
+  }
+  return min;
+});
 const legendItems = computed(() => {
   const map = new Map();
   for (const b of trackedBoxes.value) {
