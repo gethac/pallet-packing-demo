@@ -61,7 +61,8 @@ async function api(path, options = {}) {
 async function loadStandards() {
   standards.value = await api('/api/pallet-standard/listEnabled', { method: 'POST' })
   if (!standardId.value && standards.value.length) {
-    standardId.value = standards.value[0].id
+    const preferred = standards.value.find((s) => String(s.code).includes('1200x800'))
+    standardId.value = (preferred || standards.value[0]).id
   }
 }
 
@@ -309,6 +310,8 @@ onMounted(async () => {
             :pallet-items="items"
             :boxes="previewBoxes"
             :selected-pallet-no="selectedPalletNo"
+            :show-labels="false"
+            :show-carton-tape="true"
             :weight-limit="plan?.weightLimit || weightLimit"
             :height-limit="plan?.cargoHeightLimit || cargoHeightLimit"
             :area-util="selectedPalletItem?.areaUtilization || plan?.avgAreaUtilization || 0"
