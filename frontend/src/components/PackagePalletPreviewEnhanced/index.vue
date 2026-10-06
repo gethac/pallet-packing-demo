@@ -950,14 +950,23 @@ function addPackageBoxMesh(group, pallet, box) {
     edgeOpacity: box.selected ? 0.9 : 0.46,
     selected: box.selected,
   });
-  // Small side sticker label — keeps original carton colors/tape intact
+  // Logistics label sticker on front face (white card, does not recolor carton)
   const labelTex = createSideLabelTexture(box);
-  const labelMat = new THREE.MeshBasicMaterial({ map: labelTex, transparent: true, depthWrite: false });
-  const lw = Math.min(box.length * 0.5, 200);
-  const lh = Math.min(box.height * 0.26, 80);
+  const labelMat = new THREE.MeshBasicMaterial({
+    map: labelTex,
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  });
+  // ~45% of the visible front face (length × height)
+  const lw = Math.max(60, box.length * 0.45);
+  const lh = Math.max(40, box.height * 0.45);
   const label = new THREE.Mesh(new THREE.PlaneGeometry(lw, lh), labelMat);
-  label.position.set(0, box.height * 0.06, box.width / 2 + 0.9);
-  label.renderOrder = 5;
+  // Slight outward offset + vertical bias to avoid z-fighting with carton face
+  label.position.set(0, box.height * 0.02, box.width / 2 + 2.5);
+  label.renderOrder = 6;
   mesh.add(label);
   const entry = {
     mesh,
@@ -972,27 +981,42 @@ function addPackageBoxMesh(group, pallet, box) {
 
 function createSideLabelTexture(box) {
   const c = document.createElement("canvas");
-  c.width = 256;
-  c.height = 128;
+  c.width = 512;
+  c.height = 320;
   const ctx = c.getContext("2d");
-  ctx.fillStyle = "#f4efe4";
-  ctx.fillRect(0, 0, 256, 128);
-  ctx.strokeStyle = "#8d6a3c";
-  ctx.lineWidth = 4;
-  ctx.strokeRect(3, 3, 250, 122);
-  ctx.fillStyle = "#6b4a28";
-  ctx.fillRect(3, 3, 250, 28);
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 16px sans-serif";
-  ctx.fillText("LABEL", 12, 22);
-  ctx.fillStyle = "#2b1a0e";
-  ctx.font = "bold 18px sans-serif";
-  ctx.fillText(String(box.productKey || box.productLabel || "PROD").slice(0, 14), 12, 58);
-  ctx.font = "14px sans-serif";
-  ctx.fillText(`No.${String(box.key || "").slice(-8) || "-"}`, 12, 82);
-  ctx.fillText(`${Math.round(box.length)}x${Math.round(box.width)}x${Math.round(box.height)}`, 12, 104);
+  // White logistics label card
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, 512, 320);
+  ctx.strokeStyle = "#334155";
+  ctx.lineWidth = 6;
+  ctx.strokeRect(4, 4, 504, 312);
+  // header bar (light, not dark hole)
+  ctx.fillStyle = "#e2e8f0";
+  ctx.fillRect(4, 4, 504, 52);
+  ctx.fillStyle = "#0f172a";
+  const fontStack = '"Noto Sans CJK SC","Noto Sans CJK","Source Han Sans SC","Microsoft YaHei",sans-serif';
+  ctx.font = `bold 28px ${fontStack}`;
+  ctx.fillText("物流标签", 24, 40);
+  const product = String(box.productLabel || box.productKey || "产品").slice(0, 16);
+  const boxNo = String(box.key || box.boxKey || "").slice(-10) || "-";
+  const weight = box.boxWeight != null ? `${box.boxWeight} kg` : "-";
+  ctx.fillStyle = "#0f172a";
+  ctx.font = `bold 40px ${fontStack}`;
+  ctx.fillText(`品名  ${product}`, 24, 120);
+  ctx.font = `32px ${fontStack}`;
+  ctx.fillText(`箱号  ${boxNo}`, 24, 180);
+  ctx.fillText(`重量  ${weight}`, 24, 235);
+  ctx.font = `26px ${fontStack}`;
+  ctx.fillStyle = "#475569";
+  ctx.fillText(
+    `尺寸  ${Math.round(box.length)}×${Math.round(box.width)}×${Math.round(box.height)} mm`,
+    24,
+    285
+  );
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
   return tex;
 }
 
