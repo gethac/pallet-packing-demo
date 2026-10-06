@@ -73,22 +73,25 @@ flowchart LR
 
 ## Benchmark 真实结果
 
-本地执行：
+主基线：**分层 First-Fit**（`LayerFirstFitPacker`，固定朝向、贪心行列平铺、限重限高）。  
+下限参考：**顺序单列堆叠**（`NaiveStackPacker`）。  
 
 ```bash
 cd backend && mvn -q test -Dtest=PalletPackingBenchmarkTest
-# 输出 backend/target/benchmark/benchmark-results.json
 ```
 
-某次真实运行摘要（30 次均值，机器环境相关，以 JSON 为准）：
+一次真实运行摘要（25 次均值，环境相关，以 JSON 为准）：
 
-| Suite | Engine 托数 | Naive 托数 | Engine 面积利用率 | Naive 面积利用率 | Engine ms | Naive ms |
-|------|-------------|------------|-------------------|------------------|-----------|----------|
-| single-12x400 | 1 | 2 | 0.75 | 0.125 | ~0.66 | ~0.03 |
-| dense-24x300 | 1 | 4 | 1.00 | 0.063 | ~1.22 | ~0.03 |
-| mixed-allow | 1 | 3 | 0.56 | 0.135 | ~0.43 | ~0.03 |
-| large-48 | 1 | 7 | 0.73 | 0.081 | ~7.22 | ~0.04 |
-| tall-stack | 1 | 3 | 0.83 | 0.208 | ~0.47 | ~0.01 |
+| Suite | Engine托数 | FirstFit托数 | Naive托数(下限) | Engine面积 | FirstFit面积 | Engine体积 | FirstFit体积 |
+|------|------------|--------------|-----------------|------------|--------------|------------|--------------|
+| single-12x400 | 1 | 1 | 2 | 0.750 | 0.750 | 0.250 | 0.250 |
+| weight-tight-36 | 3 | 3 | 6 | 0.750 | 0.750 | 0.214 | 0.214 |
+| mixed-sku-sizes | 1 | 2 | 5 | 0.562 | 0.624 | 0.671 | 0.335 |
+| tail-merge-like | 1 | 1 | 3 | 1.000 | 0.833 | 0.625 | 0.625 |
+| bulk-96 | 4 | 4 | 24 | 0.694 | 0.694 | 0.579 | 0.579 |
+| height-tight-40 | 4 | 4 | 20 | 0.688 | 0.688 | 0.500 | 0.500 |
+
+说明：均匀箱体场景下 Engine 与 FirstFit 托数常接近（诚实结果）；**混规格**（mixed-sku-sizes）Engine 1 托 vs FirstFit 2 托，体积利用率 0.671 vs 0.335。相对 Naive 下限，托数优势显著（如 bulk-96：4 vs 24）。
 
 ![benchmark overview](docs/benchmark-overview.png)
 
