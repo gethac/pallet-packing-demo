@@ -3,14 +3,14 @@ import { computed, onMounted, ref, watch } from 'vue'
 import PackagePalletPreview from './components/PackagePalletPreview/index.vue'
 import PackagePalletPreviewEnhanced from './components/PackagePalletPreviewEnhanced/index.vue'
 
-const orderId = ref('ORDER-SINGLE')
+const orderId = ref('ORDER-MIX-PACK')
 const batchId = ref('')
 const standards = ref([])
 const standardId = ref('')
 const weightLimit = ref(500)
 const cargoHeightLimit = ref(1200)
-const allowMixed = ref(false)
-const allowMixedPackage = ref(false)
+const allowMixed = ref(true)
+const allowMixedPackage = ref(true)
 const allowMixedNoBox = ref(false)
 const loading = ref(false)
 const message = ref('')
@@ -20,13 +20,24 @@ const selectedPalletNo = ref('')
 const previewBoxes = ref([])
 
 const orderOptions = [
+  { id: 'ORDER-MIX-PACK', label: '★ 盒箱混装（4规格）' },
+  { id: 'ORDER-MIX-SIZE', label: '★ 多尺寸混托（4规格）' },
   { id: 'ORDER-SINGLE', label: '单批次示例订单' },
-  { id: 'ORDER-MIX', label: '混托演示订单' },
+  { id: 'ORDER-MIX', label: '混托演示订单（简易）' },
   { id: 'ORDER-TAIL', label: '尾托合并演示' },
   { id: 'ORDER-HEAVY', label: '超重校验订单' },
   { id: 'ORDER-TALL', label: '超高校验订单' },
   { id: 'ORDER-EMPTY', label: '空包装订单' },
 ]
+
+watch(orderId, (id) => {
+  if (id === 'ORDER-MIX-PACK' || id === 'ORDER-MIX-SIZE' || id === 'ORDER-MIX' || id === 'ORDER-TAIL') {
+    allowMixed.value = true
+    if (id === 'ORDER-MIX-PACK' || id === 'ORDER-MIX-SIZE' || id === 'ORDER-MIX') {
+      allowMixedPackage.value = true
+    }
+  }
+})
 
 const items = computed(() => plan.value?.itemList || [])
 const groups = computed(() => plan.value?.groupList || [])

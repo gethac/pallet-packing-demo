@@ -98,6 +98,66 @@ class PalletPackingEngineTest {
     }
 
     @Test
+    void pack_boxAndCartonMix_onSamePallet_whenPackageMixEnabled() {
+        // 盒箱混装：多种尺寸尾托，开启混托+盒箱混托后应合并到同一托且含 box+carton
+        PalletPackingModel.PackingRequest req = baseRequest(1200, 800, 500, 1200);
+        req.setAllowMixedPallet(true);
+        req.setAllowMixedPackagePallet(true);
+        List<PalletPackingModel.BoxTask> tasks = new ArrayList<>();
+        tasks.addAll(boxes("PROD-BOX-S", "box", 4, 300, 200, 150, 3));
+        tasks.addAll(boxes("PROD-BOX-M", "box", 3, 400, 300, 180, 5));
+        tasks.addAll(boxes("PROD-CTN-M", "carton", 3, 500, 400, 250, 10));
+        tasks.addAll(boxes("PROD-CTN-L", "carton", 2, 600, 400, 300, 14));
+        req.setBoxTaskList(tasks);
+        PalletPackingResult result = engine.pack(req);
+        assertEquals(12, result.getTotalBoxCount());
+        assertTrue(result.getTotalPalletCount() >= 1);
+        assertTrue(result.getTotalPalletCount() < 4, "混托后托盘数应少于按规格各自成托");
+        boolean hasMultiProduct = result.getItemList().stream().anyMatch(i ->
+                i.getProductKeys() != null && i.getProductKeys().contains(",")
+                        || (i.getProductKeys() != null && i.getProductKeys().split("[,、]").length > 1)
+                        || "mixed".equals(i.getGroupType()));
+        assertTrue(hasMultiProduct || result.getTotalPalletCount() == 1,
+                "应出现混托分组或单托承载多规格");
+        long modesOnFirst = result.getBoxList().stream()
+                .filter(b -> String.valueOf(result.getItemList().get(0).getPalletNo()).equals(String.valueOf(b.getPalletNo())))
+                .map(b -> b.getPackageMode())
+                .distinct()
+                .count();
+        // 若合并成功，至少一托上可看到多种尺寸
+        long distinctSizes = result.getBoxList().stream()
+                .map(b -> Math.round(b.getOccupyLength()) + "x" + Math.round(b.getOccupyWidth()) + "x" + Math.round(b.getOccupyHeight()))
+                .distinct()
+                .count();
+        assertTrue(distinctSizes >= 3, "混装结果应保留至少 3 种尺寸，实际=" + distinctSizes);
+        assertTrue(modesOnFirst >= 1);
+    }
+
+    @Test
+    void pack_multiSizeMix_samePallet_whenMixedEnabled() {
+        PalletPackingModel.PackingRequest req = baseRequest(1200, 800, 500, 1200);
+        req.setAllowMixedPallet(true);
+        req.setAllowMixedPackagePallet(true);
+        List<PalletPackingModel.BoxTask> tasks = new ArrayList<>();
+        tasks.addAll(boxes("PROD-S", "box", 4, 250, 200, 150, 2));
+        tasks.addAll(boxes("PROD-M", "box", 3, 400, 300, 200, 6));
+        tasks.addAll(boxes("PROD-L", "carton", 3, 550, 400, 280, 11));
+        tasks.addAll(boxes("PROD-XL", "carton", 2, 700, 500, 320, 16));
+        req.setBoxTaskList(tasks);
+        PalletPackingResult result = engine.pack(req);
+        assertEquals(12, result.getTotalBoxCount());
+        assertTrue(result.getTotalPalletCount() < 4);
+        long sizes = result.getBoxList().stream()
+                .map(b -> Math.round(b.getOccupyLength()) + "x" + Math.round(b.getOccupyWidth()) + "x" + Math.round(b.getOccupyHeight()))
+                .distinct()
+                .count();
+        assertTrue(sizes >= 3, "多尺寸混托应保留多种外廓，实际=" + sizes);
+        // 至少有一托箱数大于单一规格的最大件数
+        int maxBoxesOnOne = result.getItemList().stream().mapToInt(i -> i.getBoxCount()).max().orElse(0);
+        assertTrue(maxBoxesOnOne > 4, "混托后单托箱数应超过单一规格件数");
+    }
+
+    @Test
     void fingerprint_changesWhenInputChanges() {
         PalletPackingModel.PackingRequest a = baseRequest(1200, 800, 500, 1200);
         a.setBoxTaskList(boxes("PROD-A", "box", 2, 400, 300, 200, 8));

@@ -5,21 +5,34 @@ const DEFAULT_BOX_COLORS = Object.freeze({
   stroke: "#a8753f",
 });
 
+// 彩盒/白卡：偏亮色调，便于与瓦楞纸箱区分
 const BOX_COLOR_PALETTE = Object.freeze([
-  DEFAULT_BOX_COLORS,
-  { top: "#e7c596", front: "#c9955c", side: "#ad7a45", stroke: "#865b31" },
+  { top: "#f7f1e8", front: "#efe4d4", side: "#e2d3be", stroke: "#b59b7a" },
+  { top: "#fde8ef", front: "#f5cdd9", side: "#e8b0c2", stroke: "#c47a93" },
+  { top: "#e8f4ff", front: "#cfe6fb", side: "#b3d4f0", stroke: "#7aa3c4" },
+  { top: "#e9f8ee", front: "#cfead8", side: "#b3d9c0", stroke: "#7aaa88" },
+  { top: "#fff3e0", front: "#ffe0b8", side: "#f5c98f", stroke: "#c99655" },
+  { top: "#f0e8ff", front: "#ddd0f5", side: "#c7b6e8", stroke: "#9580c0" },
   { top: "#e8e3d8", front: "#cfc8ba", side: "#b8afa0", stroke: "#8e8475" },
-  { top: "#cad7df", front: "#9fb5c1", side: "#839ca9", stroke: "#667d89" },
-  { top: "#cbd9c6", front: "#a6bd9e", side: "#879f80", stroke: "#687c62" },
-  { top: "#dbc2ad", front: "#bd9276", side: "#9f755b", stroke: "#765440" },
-  { top: "#d8d1cf", front: "#b8aca8", side: "#9c8f8b", stroke: "#746966" },
 ]);
 
+// 纸箱：保留瓦楞纸真实棕色，规格间做明显色调偏移
 const CARTON_COLOR_PALETTE = Object.freeze([
-  { top: "#dcb77f", front: "#bd864d", side: "#9d6836", stroke: "#70451f" },
-  { top: "#d2aa70", front: "#ae7540", side: "#8f5b30", stroke: "#65401f" },
-  { top: "#c8ad82", front: "#a98559", side: "#886943", stroke: "#60472d" },
-  { top: "#e0bd86", front: "#bf8950", side: "#9d6938", stroke: "#714722" },
+  { top: "#e8c48a", front: "#c98a48", side: "#a86a32", stroke: "#70451f" },
+  { top: "#d4a86a", front: "#a86f38", side: "#885528", stroke: "#5c3818" },
+  { top: "#c9b07a", front: "#a88850", side: "#886838", stroke: "#5a4424" },
+  { top: "#efb870", front: "#d08a40", side: "#b06a28", stroke: "#7a4818" },
+  { top: "#b89560", front: "#957040", side: "#785828", stroke: "#4e3818" },
+  { top: "#dbc070", front: "#b89045", side: "#987030", stroke: "#684820" },
+]);
+
+export const LAYER_COLOR_PALETTE = Object.freeze([
+  { top: "#f3cf96", front: "#dfaa69", side: "#c98d50", stroke: "#a8753f" },
+  { top: "#cfe6fb", front: "#9fc4ea", side: "#7aa8d4", stroke: "#4f7eae" },
+  { top: "#cfead8", front: "#9ecfad", side: "#7ab48c", stroke: "#4f8a62" },
+  { top: "#f5cdd9", front: "#e8a0b4", side: "#d48098", stroke: "#b05870" },
+  { top: "#ddd0f5", front: "#b8a0e0", side: "#9880c8", stroke: "#7058a0" },
+  { top: "#ffe0b8", front: "#f0c080", side: "#d8a058", stroke: "#a87830" },
 ]);
 
 export const PALLET_COLORS = Object.freeze({

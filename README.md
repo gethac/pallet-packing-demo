@@ -14,7 +14,7 @@
 - **朴素基线** `NaiveStackPacker`：顺序单列堆叠，用于量化对比
 - **双预览引擎**（页面可切换）
   - **原版** `PackagePalletPreview`：生产组件完整移植（木托盘/软阴影/旋转缩放）
-  - **增强版** `PackagePalletPreviewEnhanced`：瓦楞材质+贴标、GTAO、OrbitControls、点选信息卡、分层/爆炸、装托动画、HUD/标尺
+  - **增强版** `PackagePalletPreviewEnhanced`：瓦楞/彩盒材质区分、按规格着色+图例高亮、贴标显示规格、GTAO、点选信息卡、分层/爆炸、装托动画、HUD（规格数/盒/箱）
 - **REST**：计算 / 预览 / 草稿 / 查看；H2 内存库持久化方案
 - **Benchmark**：多组 mock 订单真实统计托数、利用率、耗时（见下方）
 
@@ -109,7 +109,24 @@ cd backend && mvn -q test -Dtest=PalletPackingBenchmarkTest
 | GET | `/api/sale-order/pallet/{orderId}/preview?palletNo=` | 预览盒子列表 |
 | PUT | `/api/sale-order/pallet/{orderId}/draft` | 保存草稿 |
 
-示例订单：`ORDER-SINGLE` / `ORDER-MIX` / `ORDER-TAIL` / `ORDER-HEAVY` / `ORDER-TALL` / `ORDER-EMPTY`
+示例订单（默认 **ORDER-MIX-PACK**，自动打开混托+盒箱混托）：
+
+| 订单 ID | 说明 |
+|---------|------|
+| `ORDER-MIX-PACK` | ★ 盒箱混装：彩盒S/M + 纸箱M/L，4 规格同托 |
+| `ORDER-MIX-SIZE` | ★ 多尺寸混托：S/M/L/XL 明显不同外廓 |
+| `ORDER-SINGLE` / `ORDER-MIX` / `ORDER-TAIL` | 单品 / 简易混托 / 尾托 |
+| `ORDER-HEAVY` / `ORDER-TALL` / `ORDER-EMPTY` | 超重 / 超高 / 空包装校验 |
+
+### 混托规则（引擎已支持，无需改核心算法）
+
+引擎按产品分组装托，识别尾托后在开关打开时合并：
+
+- `allowMixedPallet`：允许不同产品尾托合并
+- `allowMixedPackagePallet`：允许 box 与 carton 混在同一托
+- `allowMixedNoBoxPallet`：允许涉及 virtual 的混托
+
+三维增强：按规格色调偏移（盒=白卡/彩盒无胶带，箱=瓦楞+封箱胶带）、右侧图例点击可只显示该规格、着色模式「按规格 / 按层 / 原始」。
 
 ## 测试与 CI
 
@@ -129,3 +146,14 @@ GitHub Actions：仓库内已准备 `.github/workflows/ci.yml`（`mvn test` + `n
 ## License / 用途
 
 仅供学习与作业演示，禁止用于还原生产敏感数据或未授权商业使用。
+
+
+## v9 混装三维演示
+
+| 场景 | 截图 |
+|------|------|
+| 盒箱混装等轴 | ![iso](docs/ui-v9-mix-pack-iso.png) |
+| 图例高亮规格 | ![legend](docs/ui-v9-mix-pack-legend-highlight.png) |
+| 爆炸视图 | ![explode](docs/ui-v9-mix-pack-explode.png) |
+
+动画：[`docs/pallet-packing-mix-animation.mp4`](docs/pallet-packing-mix-animation.mp4)（同步更新 `pallet-packing-animation.mp4` / `.gif`）。

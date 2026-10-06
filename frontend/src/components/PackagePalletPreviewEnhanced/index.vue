@@ -86,9 +86,32 @@
         <div class="ppe-hud__row">
           <span>重量 <b>{{ fmtNum(totalWeightHud) }}</b>/{{ fmtNum(weightLimit) }}kg</span>
           <span>高度 <b>{{ fmtNum(stackHeightHud) }}</b>/{{ fmtNum(heightLimit) }}mm</span>
-          <span>箱数 <b>{{ visibleBoxCount }}/{{ trackedBoxes.length }}</b></span>
+          <span>件数 <b>{{ visibleBoxCount }}/{{ trackedBoxes.length }}</b></span>
+        </div>
+        <div class="ppe-hud__row">
+          <span>规格 <b>{{ legendItems.length }}</b></span>
+          <span>盒 <b>{{ boxModeCount }}</b></span>
+          <span>箱 <b>{{ cartonModeCount }}</b></span>
         </div>
       </div>
+      <aside v-if="legendItems.length" class="ppe-legend" aria-label="规格图例">
+        <header>规格图例 <small>点击高亮</small></header>
+        <button
+          v-for="item in legendItems"
+          :key="item.key"
+          type="button"
+          class="ppe-legend__item"
+          :class="{ active: legendFilterKey === item.key, dim: legendFilterKey && legendFilterKey !== item.key }"
+          @click="toggleLegendFilter(item.key)"
+        >
+          <i class="ppe-legend__swatch" :style="{ background: item.swatch }"></i>
+          <span class="ppe-legend__text">
+            <b>{{ item.label }}</b>
+            <em>{{ item.modeLabel }} · {{ item.size }} · ×{{ item.count }}</em>
+          </span>
+        </button>
+        <button v-if="legendFilterKey" type="button" class="ppe-legend__clear" @click="legendFilterKey = null">显示全部</button>
+      </aside>
       <div v-if="sceneData" class="ppe-ruler" aria-hidden="true">
         <div class="ppe-ruler__track"><div class="ppe-ruler__fill" :style="{ height: rulerFillPct + '%' }"></div></div>
         <div class="ppe-ruler__labels"><span>{{ fmtNum(heightLimit) }}</span><span>{{ fmtNum(stackHeightHud) }}</span><span>0</span></div>
@@ -133,6 +156,15 @@
         <label>爆炸 {{ explodeGap.toFixed(1) }}</label>
         <input type="range" min="0" max="2" step="0.1" v-model.number="explodeGap" />
       </div>
+      <div class="ppe-toolbar__group">
+        <label>着色
+          <select v-model="colorMode">
+            <option value="bySpec">按规格着色</option>
+            <option value="byLayer">按层着色</option>
+            <option value="original">原始</option>
+          </select>
+        </label>
+      </div>
     </div>
     <div v-if="palletTabs.length > 1" class="ppe-tabs">
       <button
@@ -160,7 +192,7 @@ import {
   isBrakeDiscAssetLoadSettled,
   loadBrakeDiscAsset,
 } from "./brakeDiscAsset";
-import { PALLET_COLORS, createPackagePalletPreviewSceneData } from "./geometry";
+import { PALLET_COLORS, LAYER_COLOR_PALETTE, createPackagePalletPreviewSceneData } from "./geometry";
 
 const MIN_CAMERA_ZOOM = 0.75;
 const MAX_CAMERA_ZOOM = 1.6;
@@ -275,6 +307,8 @@ const animSpeed = ref(1);
 const animIndex = ref(0);
 const layerFilter = ref(0);
 const explodeGap = ref(0);
+const colorMode = ref("bySpec");
+const legendFilterKey = ref(null);
 const selectedInfo = ref(null);
 const trackedBoxes = ref([]);
 let boxMeshEntries = [];
@@ -342,6 +376,32 @@ const maxLayerHud = computed(() =>
   trackedBoxes.value.reduce((m, b) => Math.max(m, Number(b.layerNo || b.layer || 1)), 1)
 );
 const visibleBoxCount = computed(() => Math.min(animIndex.value, trackedBoxes.value.length));
+const boxModeCount = computed(() =>
+  trackedBoxes.value.filter((b) => String(b.packageMode || "box").toLowerCase() !== "carton" && String(b.packageMode || "").toLowerCase() !== "virtual").length
+);
+const cartonModeCount = computed(() =>
+  trackedBoxes.value.filter((b) => String(b.packageMode || "").toLowerCase() === "carton").length
+);
+const legendItems = computed(() => {
+  const map = new Map();
+  for (const b of trackedBoxes.value) {
+    const key = String(b.productKey || b.productLabel || "unknown");
+    if (!map.has(key)) {
+      const mode = String(b.packageMode || "box").toLowerCase();
+      map.set(key, {
+        key,
+        label: b.productLabel || b.productKey || key,
+        mode,
+        modeLabel: mode === "carton" ? "箱" : mode === "virtual" ? "虚拟" : "盒",
+        size: `${Math.round(b.length || b.boxLength || 0)}×${Math.round(b.width || b.boxWidth || 0)}×${Math.round(b.height || b.boxHeight || 0)}`,
+        count: 0,
+        swatch: (b.colors && b.colors.front) || "#dfaa69",
+      });
+    }
+    map.get(key).count += 1;
+  }
+  return [...map.values()];
+});
 const rulerFillPct = computed(() => {
   const lim = Number(props.heightLimit) || 1;
   return Math.min(100, (Number(stackHeightHud.value) / lim) * 100);
@@ -372,6 +432,14 @@ watch(sceneData, () => {
   scheduleSceneRebuild();
 });
 
+watch(colorMode, () => {
+  scheduleSceneRebuild();
+});
+watch(legendFilterKey, () => {
+  applyEnhancementVisibility();
+});
+
+
 watch(
   () => props.palletRotationScopes,
   () => {
@@ -389,19 +457,33 @@ function applyEnhancementVisibility() {
   const layer = layerFilter.value;
   const explode = explodeGap.value;
   const shown = animIndex.value;
+  const filterKey = legendFilterKey.value;
   boxMeshEntries.forEach((entry) => {
     const layerOk = layer === 0 || entry.layer <= layer;
-    entry.mesh.visible = entry.index < shown && layerOk;
+    const key = String(entry.box.productKey || entry.box.productLabel || "unknown");
+    const filterOk = !filterKey || filterKey === key;
+    entry.mesh.visible = entry.index < shown && layerOk && filterOk;
     if (entry.home) {
       entry.mesh.position.copy(entry.home);
       if (explode > 0) {
-        entry.mesh.position.y = entry.home.y + (entry.layer - 1) * explode * 90;
+        // 层间拉开 + 同层按索引轻微错位，混装单层也能看出爆炸
+        const i = entry.index;
+        entry.mesh.position.y = entry.home.y + (entry.layer - 1) * explode * 100 + (i % 5) * explode * 28;
+        entry.mesh.position.x = entry.home.x + ((i % 3) - 1) * explode * 55;
+        entry.mesh.position.z = entry.home.z + ((((i / 3) | 0) % 3) - 1) * explode * 45;
       }
     }
     const selected = selectedInfo.value && selectedInfo.value.index === entry.index;
-    entry.mesh.scale.setScalar(selected ? 1.035 : 1);
+    const legendHit = filterKey && filterKey === key;
+    entry.mesh.scale.setScalar(selected || legendHit ? 1.035 : 1);
+    // dim non-matching when filtering via opacity on materials is heavy; scale + visibility enough
   });
   scheduleThreeRender();
+}
+
+function toggleLegendFilter(key) {
+  legendFilterKey.value = legendFilterKey.value === key ? null : key;
+  applyEnhancementVisibility();
 }
 
 function pickBoxAt(event) {
@@ -940,16 +1022,50 @@ function addWoodGrainLines(group, size, position, seed = 0) {
   });
 }
 
+function resolveDisplayColors(box) {
+  const mode = colorMode.value;
+  if (mode === "original") {
+    const base = box.packageMode === "carton"
+      ? { top: "#dcb77f", front: "#bd864d", side: "#9d6836", stroke: "#70451f" }
+      : { top: "#f3cf96", front: "#dfaa69", side: "#c98d50", stroke: "#a8753f" };
+    return base;
+  }
+  if (mode === "byLayer") {
+    const idx = Math.max(0, (Number(box.layerNo || 1) - 1) % LAYER_COLOR_PALETTE.length);
+    return LAYER_COLOR_PALETTE[idx];
+  }
+  // bySpec — geometry already assigned product palette; keep it
+  return box.colors || { top: "#f3cf96", front: "#dfaa69", side: "#c98d50", stroke: "#a8753f" };
+}
+
 function addPackageBoxMesh(group, pallet, box) {
   const { x, y, z } = resolvePackageBoxCenter(pallet, box);
+  const colors = resolveDisplayColors(box);
+  // keep legend swatch in sync
+  box.colors = colors;
   const mesh = addCuboid(group, {
     size: [box.length, box.height, box.width],
     position: [x, y, z],
-    colors: [box.colors.side, box.colors.front, box.colors.top],
-    edgeColor: box.selected ? "#2447a1" : box.colors.stroke,
+    colors: [colors.side, colors.front, colors.top],
+    edgeColor: box.selected ? "#2447a1" : colors.stroke,
     edgeOpacity: box.selected ? 0.9 : 0.46,
     selected: box.selected,
   });
+  // 彩盒：顶面色带（无胶带）；纸箱靠 addCartonTopDetails 胶带区分
+  if (box.packageMode !== "carton" && box.packageMode !== "virtual") {
+    const bandW = box.length * 0.92;
+    const bandD = Math.max(8, box.width * 0.12);
+    const bandGeo = new THREE.BoxGeometry(bandW, 2.2, bandD);
+    const bandMat = new THREE.MeshStandardMaterial({
+      color: colors.stroke,
+      roughness: 0.72,
+      metalness: 0.04,
+    });
+    const band = new THREE.Mesh(bandGeo, bandMat);
+    band.position.set(0, box.height / 2 + 1.2, 0);
+    band.castShadow = false;
+    mesh.add(band);
+  }
   // Logistics label sticker on front face (white card, does not recolor carton)
   const labelTex = createSideLabelTexture(box);
   const labelMat = new THREE.MeshBasicMaterial({
@@ -1002,17 +1118,16 @@ function createSideLabelTexture(box) {
   const weight = box.boxWeight != null ? `${box.boxWeight} kg` : "-";
   ctx.fillStyle = "#0f172a";
   ctx.font = `bold 40px ${fontStack}`;
-  ctx.fillText(`品名  ${product}`, 24, 120);
-  ctx.font = `32px ${fontStack}`;
-  ctx.fillText(`箱号  ${boxNo}`, 24, 180);
-  ctx.fillText(`重量  ${weight}`, 24, 235);
-  ctx.font = `26px ${fontStack}`;
-  ctx.fillStyle = "#475569";
-  ctx.fillText(
-    `尺寸  ${Math.round(box.length)}×${Math.round(box.width)}×${Math.round(box.height)} mm`,
-    24,
-    285
-  );
+  const modeTag = String(box.packageMode || "box").toLowerCase() === "carton" ? "箱" : "盒";
+  const spec = `${Math.round(box.length)}×${Math.round(box.width)}×${Math.round(box.height)}`;
+  ctx.fillText(`品名  ${product}`, 24, 110);
+  ctx.font = `bold 34px ${fontStack}`;
+  ctx.fillStyle = "#1e3a8a";
+  ctx.fillText(`规格  ${spec} mm · ${modeTag}`, 24, 165);
+  ctx.fillStyle = "#0f172a";
+  ctx.font = `30px ${fontStack}`;
+  ctx.fillText(`箱号  ${boxNo}`, 24, 220);
+  ctx.fillText(`重量  ${weight}`, 24, 270);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
@@ -1663,4 +1778,71 @@ function positionCameraForScene(stableFrame) {
 .ppe-tabs button.active { border-color:#0ea5e9; background:#e0f2fe; }
 .package-pallet-preview { grid-template-rows: 1fr auto auto; }
 
+
+.ppe-legend {
+  position: absolute;
+  top: 54px;
+  right: 12px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 168px;
+  max-width: 220px;
+  max-height: 58%;
+  overflow: auto;
+  padding: 8px;
+  background: rgb(255 255 255 / 92%);
+  border: 1px solid #dfe6f3;
+  border-radius: 12px;
+  box-shadow: 0 8px 18px rgb(39 56 95 / 12%);
+  backdrop-filter: blur(6px);
+}
+.ppe-legend header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.ppe-legend header small { font-weight: 500; color: #64748b; }
+.ppe-legend__item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 6px 6px;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.ppe-legend__item:hover { background: #f1f5ff; }
+.ppe-legend__item.active { background: #e8efff; border-color: #93b0ff; }
+.ppe-legend__item.dim { opacity: 0.45; }
+.ppe-legend__swatch {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border-radius: 4px;
+  border: 1px solid rgb(0 0 0 / 18%);
+}
+.ppe-legend__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ppe-legend__text b { font-size: 12px; color: #0f172a; line-height: 1.2; }
+.ppe-legend__text em { font-style: normal; font-size: 10px; color: #64748b; line-height: 1.25; }
+.ppe-legend__clear {
+  margin-top: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #395ef1;
+  cursor: pointer;
+  background: #f0f4ff;
+  border: 0;
+  border-radius: 999px;
+}
 </style>
