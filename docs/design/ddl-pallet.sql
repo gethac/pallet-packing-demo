@@ -68,8 +68,6 @@ CREATE TABLE IF NOT EXISTS mes_sale_order_pallet_plan (
   AVG_HEIGHT_UTILIZATION     DOUBLE        NULL COMMENT '平均高度利用率(0~1)',
   CALCULATED_TIME            DATETIME      NULL COMMENT '计算时间',
   CALCULATION_INPUT_HASH     VARCHAR(128)  NULL COMMENT '计算输入指纹；输入不变时复用已存结果',
-  SORT                       INT           NULL COMMENT '排序',
-  REMARK                     VARCHAR(500)  NULL COMMENT '备注',
   TENANT_ID       VARCHAR(64)  NULL COMMENT '租户',
   ORG_ID          VARCHAR(64)  NULL COMMENT '所属组织',
   CREATED_BY      VARCHAR(64)  NULL COMMENT '创建人',
@@ -161,6 +159,6 @@ CREATE TABLE IF NOT EXISTS mes_sale_order_pallet_item (
 --   pallet_plan     ↔ mes_sale_order_pallet_plan
 --   pallet_group    ↔ mes_sale_order_pallet_group
 --   pallet_item     ↔ mes_sale_order_pallet_item
---   演示表保留全部业务列（sortNo ↔ SORT），省略租户/组织/审计/REVISION/DELETED/FIELD0~9
---   与 REMARK；结构由 JPA ddl-auto 生成，仅用于本地演示。
+--   演示表保留全部业务列（分组、明细的 sortNo ↔ SORT），省略租户/组织/审计/REVISION/DELETED/
+--   FIELD0~9 以及分组、明细的 REMARK；结构由 JPA ddl-auto 生成，仅用于本地演示。
 -- ---------------------------------------------------------------------
