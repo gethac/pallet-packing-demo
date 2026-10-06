@@ -113,7 +113,8 @@ cd backend && mvn test
 cd frontend && npm run build
 ```
 
-GitHub Actions：push 后自动跑 `mvn test` + `npm run build`（见 `.github/workflows/ci.yml`）。
+GitHub Actions：仓库内已准备 `.github/workflows/ci.yml`（`mvn test` + `npm run build`）。
+> 说明：当前推送所用 OAuth token 缺少 `workflow` 权限，workflow 文件未能写入远端；请用具备 `workflow` scope 的 PAT 执行一次 `git add .github && git commit && git push`，或在 GitHub 网页手动创建同等 workflow 后即可看到真实 CI 结果。
 
 ## 录屏素材
 
