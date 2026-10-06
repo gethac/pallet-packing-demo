@@ -173,3 +173,10 @@ GitHub Actions：仓库内已准备 `.github/workflows/ci.yml`（`mvn test` + `n
 | 特写·爆炸 | ![exp-c](docs/ui-v10-mix-pack-explode-closeup.png) |
 
 动画：[`docs/pallet-packing-mix-animation.mp4`](docs/pallet-packing-mix-animation.mp4)（同步更新 `pallet-packing-animation.mp4` / `.gif`）。
+
+## 设计与证据归档（作业）
+
+- `docs/design/`：需求规格、UI 规范、DDL、ER、线框/高保真、v11 混装效果与 benchmark 图（GitHub 私有仓即协作归档处）。
+- `docs/evidence/`：CI / git log / skill 文件 / SpotBugs diff / 校验单测等过程证据图。
+- `AGENTS.md` 与 `.codex/skills/*`：Codex 协作约定与分阶段 skill。
+- 当前 HEAD：见 `git log -1`；Benchmark 数字以 `docs/benchmark-results.json` 为准。
