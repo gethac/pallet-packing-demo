@@ -1,5 +1,7 @@
 # 托盘摆放 Demo（Pallet Packing）
 
+[![CI](https://github.com/gethac/pallet-packing-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/gethac/pallet-packing-demo/actions/workflows/ci.yml)
+
 从 MES「销售订单托盘摆放」能力抽取的**可独立运行最小实现**，并增加增强版三维预览、引擎基准对比与 CI。
 
 > 声明：本仓库为教学/作业演示用模拟工程，已去除公司敏感信息（内网地址、客户名、私有包等），数据为 Mock。
