@@ -1,94 +1,125 @@
-# 托盘摆放 Demo（pallet-packing-demo）
+# 托盘摆放 Demo（Pallet Packing）
 
-从生产 MES「销售订单 · 托盘摆放」功能中抽取的**可独立运行最小实现（模拟版）**，用于 AI CODING 作业的 git 地址与演示。
+从 MES「销售订单托盘摆放」能力抽取的**可独立运行最小实现**，并增加增强版三维预览、引擎基准对比与 CI。
 
-> 本仓库**不是**完整业务系统拷贝：已剥离公司内部框架、私有包名、客户数据与内网配置；订单/包装上游使用内存模拟数据；装载引擎为保留核心语义的简化实现。
+> 声明：本仓库为教学/作业演示用模拟工程，已去除公司敏感信息（内网地址、客户名、私有包等），数据为 Mock。
 
-## 功能说明
+![装托动画](docs/pallet-packing-animation.gif)
 
-- 选择托盘标准、货物限重/限高、混托开关
-- 调用装载引擎计算托盘方案（分组、实例、盒子坐标）
-- 方案落库到 H2（plan / group / item，`BOX_LAYOUT` JSON）
-- 按托盘号预览三维摆放（Vue3 + Three.js，原版 PackagePalletPreview：木托盘/软阴影/旋转缩放）
-- 输入指纹复用、订单级保存锁（简化版）
+## 功能亮点
 
-## 目录结构
+- **装载引擎** `PalletPackingEngine`：分组装托、层内摆放/碰撞、限重限高、混托规则、尾托合并、利用率
+- **朴素基线** `NaiveStackPacker`：顺序单列堆叠，用于量化对比
+- **双预览引擎**（页面可切换）
+  - **原版** `PackagePalletPreview`：生产组件完整移植（木托盘/软阴影/旋转缩放）
+  - **增强版** `PackagePalletPreviewEnhanced`：瓦楞材质+贴标、GTAO、OrbitControls、点选信息卡、分层/爆炸、装托动画、HUD/标尺
+- **REST**：计算 / 预览 / 草稿 / 查看；H2 内存库持久化方案
+- **Benchmark**：多组 mock 订单真实统计托数、利用率、耗时（见下方）
 
-```
-pallet-packing-demo/
-├── README.md
-├── .gitignore
-├── backend/                 # Spring Boot 3 + JPA + H2
-│   ├── pom.xml
-│   └── src/main/java/com/example/pallet/
-│       ├── engine/          # PalletPackingEngine 等
-│       ├── entity/          # Plan/Group/Item/Standard
-│       ├── service/         # 计算、保存、Mock 订单
-│       └── controller/      # REST API
-└── frontend/                # Vue3 + Vite + Three.js
-    └── src/
-        ├── App.vue
-        ├── assets/models/brake-disc.glb
-        └── components/
-            ├── PackagePalletPreview/   # 原版 MES 三维预览（已移植）
-            │   ├── index.vue
-            │   ├── geometry.js
-            │   └── brakeDiscAsset.js
-            └── package-pallet-preview/ # 薄封装（原文档页依赖已剥离）
-```
-
-## 启动方式
-
-### 1. 后端
+## 快速启动
 
 ```bash
+# 后端（JDK 21 + Maven）
 cd backend
 mvn spring-boot:run
-```
 
-默认端口：`http://localhost:8080`  
-H2 控制台：`http://localhost:8080/h2-console`（JDBC URL: `jdbc:h2:mem:pallet`）
-
-### 2. 前端
-
-```bash
+# 前端（另开终端）
 cd frontend
 npm install
 npm run dev
 ```
 
-浏览器打开 Vite 提示的地址（默认 `http://localhost:5173`），API 经代理转发到 8080。
+浏览器打开 http://127.0.0.1:5173/  
+默认预览为**增强版**；可在「预览引擎」下拉切回原版对比。
 
-### 3. 单元测试
+## 目录结构
 
-```bash
-cd backend
-mvn test
+```
+├── backend/                 # Spring Boot + H2 + JUnit
+│   └── src/main/java/com/example/pallet/
+│       ├── engine/          # PalletPackingEngine + NaiveStackPacker
+│       ├── service/         # Mock 订单 + 方案服务
+│       └── controller/      # REST
+├── frontend/
+│   └── src/components/
+│       ├── PackagePalletPreview/          # 原版（保留可对比）
+│       └── PackagePalletPreviewEnhanced/  # 增强版
+├── docs/                    # 动图、benchmark 图、架构素材
+└── .github/workflows/ci.yml
 ```
 
-## 接口列表
+## 架构
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET/POST | `/api/pallet-standard/listEnabled` | 启用中的托盘标准 |
-| GET | `/api/sale-order/pallet/{orderId}` | 查询计算上下文/已存方案 |
-| GET | `/api/sale-order/pallet/{orderId}/view` | 只读查看已保存方案 |
-| GET | `/api/sale-order/pallet/{orderId}/preview?palletNo=` | 单托盘盒子布局 |
+```mermaid
+flowchart LR
+  UI[Vue3 App] -->|REST| API[PalletController]
+  API --> Svc[PalletPlanService]
+  Svc --> Mock[MockOrderDataService]
+  Svc --> Eng[PalletPackingEngine]
+  Svc --> DB[(H2 Plan/Group/Item)]
+  UI --> PrevOrig[PackagePalletPreview]
+  UI --> PrevEnh[PackagePalletPreviewEnhanced]
+  Eng -.benchmark.-> Naive[NaiveStackPacker]
+```
+
+## 算法说明（简）
+
+1. 按产品/包装规则分组；组内按层贪心摆放（可旋转），做平面碰撞与限重限高校验  
+2. 可选混托：尾托合并、盒箱混托开关  
+3. 输出每托 `BOX_LAYOUT`（坐标/占位尺寸/层号），供三维还原  
+4. 输入指纹：参数未变可跳过重算  
+
+朴素基线仅「单列向上堆叠，超限新开托」，用于证明引擎在托数与面积利用率上的优势。
+
+## Benchmark 真实结果
+
+本地执行：
+
+```bash
+cd backend && mvn -q test -Dtest=PalletPackingBenchmarkTest
+# 输出 backend/target/benchmark/benchmark-results.json
+```
+
+某次真实运行摘要（30 次均值，机器环境相关，以 JSON 为准）：
+
+| Suite | Engine 托数 | Naive 托数 | Engine 面积利用率 | Naive 面积利用率 | Engine ms | Naive ms |
+|------|-------------|------------|-------------------|------------------|-----------|----------|
+| single-12x400 | 1 | 2 | 0.75 | 0.125 | ~0.66 | ~0.03 |
+| dense-24x300 | 1 | 4 | 1.00 | 0.063 | ~1.22 | ~0.03 |
+| mixed-allow | 1 | 3 | 0.56 | 0.135 | ~0.43 | ~0.03 |
+| large-48 | 1 | 7 | 0.73 | 0.081 | ~7.22 | ~0.04 |
+| tall-stack | 1 | 3 | 0.83 | 0.208 | ~0.47 | ~0.01 |
+
+![benchmark overview](docs/benchmark-overview.png)
+
+原始数据：[`docs/benchmark-results.json`](docs/benchmark-results.json)
+
+## 主要接口
+
+| Method | Path | 说明 |
+|--------|------|------|
+| GET/POST | `/api/pallet-standard/listEnabled` | 托盘标准 |
+| GET | `/api/sale-order/pallet/{orderId}` | 查询方案 |
 | POST | `/api/sale-order/pallet/{orderId}/calculate` | 计算并保存 |
-| PUT | `/api/sale-order/pallet/{orderId}/draft` | 保存草稿（同计算保存） |
+| GET | `/api/sale-order/pallet/{orderId}/preview?palletNo=` | 预览盒子列表 |
+| PUT | `/api/sale-order/pallet/{orderId}/draft` | 保存草稿 |
 
-示例订单号：`ORDER-SINGLE`、`ORDER-MIX`、`ORDER-TAIL`、`ORDER-HEAVY`、`ORDER-TALL`、`ORDER-EMPTY`。
+示例订单：`ORDER-SINGLE` / `ORDER-MIX` / `ORDER-TAIL` / `ORDER-HEAVY` / `ORDER-TALL` / `ORDER-EMPTY`
 
-## 保留 / 简化 / 模拟对照
+## 测试与 CI
 
-| 类别 | 内容 |
-|------|------|
-| 保留 | 托盘标准、方案/分组/实例模型、BOX_LAYOUT JSON、限重限高、混托三开关语义、利用率、预览坐标、指纹与保存锁概念、REST 形态 |
-| 简化 | 装载引擎（去除生产版 Excel 布局/复杂分区等），锁为进程内 ReentrantLock，指纹为 SHA-256 字符串 |
-| 模拟 | 销售订单与包装结果（`MockOrderDataService`），无真实客户/物料主数据，H2 内存库 |
+```bash
+cd backend && mvn test
+cd frontend && npm run build
+```
 
-## 说明
+GitHub Actions：push 后自动跑 `mvn test` + `npm run build`（见 `.github/workflows/ci.yml`）。
 
-- 包名使用通用名 `com.example.pallet`，不包含公司域名或内部组件。
-- 不包含密码、内网地址、真实客户名或生产连接串。
-- 请勿将生产库数据或 `.class` 编译产物提交到本仓库。
+## 录屏素材
+
+- 动画 MP4：`docs/pallet-packing-animation.mp4`
+- README 动图：`docs/pallet-packing-animation.gif`
+
+## License / 用途
+
+仅供学习与作业演示，禁止用于还原生产敏感数据或未授权商业使用。
