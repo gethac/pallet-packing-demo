@@ -422,6 +422,9 @@ public class PalletPackingEngine {
 
                 for (PlacedBox box : p.boxes) {
                     PalletPackingResult.BoxResult br = new PalletPackingResult.BoxResult();
+                    br.setBoxKey(box.task.getTaskKey());
+                    br.setTaskKey(box.task.getTaskKey());
+                    br.setProductLabel(box.task.getProductLabel());
                     br.setGroupNo(g.getGroupNo());
                     br.setGroupType(p.groupType);
                     br.setProductKeys(p.productKeys);

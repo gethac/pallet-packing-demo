@@ -73,6 +73,9 @@ public class PalletPackingResult {
 
     @Data
     public static class BoxResult {
+        private String boxKey;
+        private String taskKey;
+        private String productLabel;
         private String groupNo;
         private String groupType;
         private String productKeys;

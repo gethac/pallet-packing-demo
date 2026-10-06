@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import PalletPreview from './components/PalletPreview.vue'
+import PackagePalletPreview from './components/PackagePalletPreview/index.vue'
 
 const orderId = ref('ORDER-SINGLE')
 const batchId = ref('')
@@ -29,6 +29,20 @@ const orderOptions = [
 
 const items = computed(() => plan.value?.itemList || [])
 const groups = computed(() => plan.value?.groupList || [])
+const selectedPalletItem = computed(() =>
+  items.value.find((item) => item.palletNo === selectedPalletNo.value) || null
+)
+const selectedPalletSummary = computed(() => {
+  const item = selectedPalletItem.value
+  if (!item) return { boxCountText: '', layerText: '', heightText: '' }
+  return {
+    boxCountText: `${item.boxCount ?? 0}箱`,
+    layerText: `${item.layerCount ?? 0}层`,
+    heightText: `${item.totalHeight ?? 0}mm`,
+  }
+})
+const palletRotationScopes = ref({})
+const previewSwitching = ref(false)
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -132,13 +146,25 @@ async function saveDraft() {
 async function loadPreview() {
   if (!selectedPalletNo.value) {
     previewBoxes.value = []
+    previewSwitching.value = false
     return
   }
-  const q = new URLSearchParams({
-    batchId: batchId.value || '',
-    palletNo: selectedPalletNo.value,
-  })
-  previewBoxes.value = await api(`/api/sale-order/pallet/${orderId.value}/preview?${q}`)
+  previewSwitching.value = true
+  try {
+    const q = new URLSearchParams({
+      batchId: batchId.value || '',
+      palletNo: selectedPalletNo.value,
+    })
+    const rows = await api(`/api/sale-order/pallet/${orderId.value}/preview?${q}`)
+    // Ensure each box carries palletNo for PackagePalletPreview scene filtering
+    previewBoxes.value = (rows || []).map((box, index) => ({
+      ...box,
+      palletNo: box.palletNo || selectedPalletNo.value,
+      boxKey: box.boxKey || box.taskKey || `${selectedPalletNo.value}-${index}`,
+    }))
+  } finally {
+    previewSwitching.value = false
+  }
 }
 
 watch(selectedPalletNo, () => {
@@ -256,12 +282,30 @@ onMounted(async () => {
       </section>
 
       <section class="panel preview-panel">
-        <h2>三维预览 {{ selectedPalletNo ? `· ${selectedPalletNo}` : '' }}</h2>
-        <PalletPreview
-          :pallet-length="plan?.palletLength || 1200"
-          :pallet-width="plan?.palletWidth || 800"
-          :boxes="previewBoxes"
-        />
+        <div class="preview-header">
+          <h2>托盘预览 {{ selectedPalletNo ? `· ${selectedPalletNo}` : '' }}</h2>
+          <div v-if="selectedPalletNo" class="preview-stats">
+            <span>{{ selectedPalletSummary.boxCountText }}</span>
+            <span>{{ selectedPalletSummary.layerText }}</span>
+            <span>{{ selectedPalletSummary.heightText }}</span>
+          </div>
+        </div>
+        <div class="preview-card" :class="{ 'is-switching': previewSwitching }" :aria-busy="previewSwitching">
+          <PackagePalletPreview
+            :pallet-length="plan?.palletLength || 1200"
+            :pallet-width="plan?.palletWidth || 800"
+            :pallet-height="120"
+            :pallet-items="items"
+            :boxes="previewBoxes"
+            :selected-pallet-no="selectedPalletNo"
+            :pallet-rotation-scopes="palletRotationScopes"
+            :show-labels="false"
+            :show-rotate-controls="true"
+          />
+          <div v-if="previewSwitching" class="preview-loading" aria-hidden="true">
+            <span class="preview-loading-icon"></span>
+          </div>
+        </div>
       </section>
     </div>
   </div>
@@ -288,7 +332,34 @@ onMounted(async () => {
 .msg { color: #b45309; background: #fffbeb; border: 1px solid #fcd34d; padding: 8px 12px; border-radius: 8px; }
 .summary { color: #475569; font-size: 13px; }
 tr.active { background: #eff6ff; }
-.preview-panel { min-height: 480px; }
+.preview-panel { min-height: 520px; display: flex; flex-direction: column; }
+.preview-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+.preview-header h2 { margin: 0; font-size: 16px; }
+.preview-stats { display: flex; gap: 10px; color: #64748b; font-size: 13px; }
+.preview-card {
+  position: relative;
+  flex: 1;
+  min-height: 460px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #eef2f6;
+  border: 1px solid #e5e7eb;
+}
+.preview-card :deep(.package-pallet-preview) {
+  width: 100%;
+  height: 100%;
+  min-height: 460px;
+}
+.preview-card.is-switching { pointer-events: none; }
+.preview-loading {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(238, 242, 246, 0.55);
+}
+.preview-loading-icon {
+  width: 28px; height: 28px; border: 3px solid #94a3b8; border-top-color: transparent;
+  border-radius: 50%; animation: spin 0.65s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 h2 { margin: 0 0 10px; font-size: 16px; }
 @media (max-width: 960px) {
   .grid { grid-template-columns: 1fr; }
