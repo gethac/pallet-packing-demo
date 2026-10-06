@@ -9,7 +9,7 @@
 - 选择托盘标准、货物限重/限高、混托开关
 - 调用装载引擎计算托盘方案（分组、实例、盒子坐标）
 - 方案落库到 H2（plan / group / item，`BOX_LAYOUT` JSON）
-- 按托盘号预览三维摆放（Vue3 + Three.js）
+- 按托盘号预览三维摆放（Vue3 + Three.js，原版 PackagePalletPreview：木托盘/软阴影/旋转缩放）
 - 输入指纹复用、订单级保存锁（简化版）
 
 ## 目录结构
@@ -28,7 +28,13 @@ pallet-packing-demo/
 └── frontend/                # Vue3 + Vite + Three.js
     └── src/
         ├── App.vue
-        └── components/PalletPreview.vue
+        ├── assets/models/brake-disc.glb
+        └── components/
+            ├── PackagePalletPreview/   # 原版 MES 三维预览（已移植）
+            │   ├── index.vue
+            │   ├── geometry.js
+            │   └── brakeDiscAsset.js
+            └── package-pallet-preview/ # 薄封装（原文档页依赖已剥离）
 ```
 
 ## 启动方式
