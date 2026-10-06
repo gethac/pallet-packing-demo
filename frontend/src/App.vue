@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import PackagePalletPreview from './components/PackagePalletPreview/index.vue'
+import PackagePalletPreviewEnhanced from './components/PackagePalletPreviewEnhanced/index.vue'
 
 const orderId = ref('ORDER-SINGLE')
 const batchId = ref('')
@@ -43,6 +44,7 @@ const selectedPalletSummary = computed(() => {
 })
 const palletRotationScopes = ref({})
 const previewSwitching = ref(false)
+const previewMode = ref('enhanced') // 'enhanced' | 'original'
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -290,8 +292,31 @@ onMounted(async () => {
             <span>{{ selectedPalletSummary.heightText }}</span>
           </div>
         </div>
+        <div class="preview-mode">
+          <label>预览引擎
+            <select v-model="previewMode">
+              <option value="enhanced">增强版（质感/AO/动画/交互）</option>
+              <option value="original">原版 PackagePalletPreview</option>
+            </select>
+          </label>
+        </div>
         <div class="preview-card" :class="{ 'is-switching': previewSwitching }" :aria-busy="previewSwitching">
+          <PackagePalletPreviewEnhanced
+            v-if="previewMode === 'enhanced'"
+            :pallet-length="plan?.palletLength || 1200"
+            :pallet-width="plan?.palletWidth || 800"
+            :pallet-height="120"
+            :pallet-items="items"
+            :boxes="previewBoxes"
+            :selected-pallet-no="selectedPalletNo"
+            :weight-limit="plan?.weightLimit || weightLimit"
+            :height-limit="plan?.cargoHeightLimit || cargoHeightLimit"
+            :area-util="selectedPalletItem?.areaUtilization || plan?.avgAreaUtilization || 0"
+            :height-util="selectedPalletItem?.heightUtilization || plan?.avgHeightUtilization || 0"
+            @select-pallet="selectedPalletNo = $event"
+          />
           <PackagePalletPreview
+            v-else
             :pallet-length="plan?.palletLength || 1200"
             :pallet-width="plan?.palletWidth || 800"
             :pallet-height="120"
@@ -336,10 +361,12 @@ tr.active { background: #eff6ff; }
 .preview-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
 .preview-header h2 { margin: 0; font-size: 16px; }
 .preview-stats { display: flex; gap: 10px; color: #64748b; font-size: 13px; }
+.preview-mode { margin-bottom: 8px; font-size: 12px; color: #64748b; }
+.preview-mode select { margin-left: 6px; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; }
 .preview-card {
   position: relative;
   flex: 1;
-  min-height: 460px;
+  min-height: 520px;
   border-radius: 10px;
   overflow: hidden;
   background: #eef2f6;
@@ -348,7 +375,7 @@ tr.active { background: #eff6ff; }
 .preview-card :deep(.package-pallet-preview) {
   width: 100%;
   height: 100%;
-  min-height: 460px;
+  min-height: 520px;
 }
 .preview-card.is-switching { pointer-events: none; }
 .preview-loading {
